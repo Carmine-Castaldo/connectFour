@@ -1,6 +1,9 @@
+#include "connectionController.h"
+#include "matchController.h"
+#define PORT 8080
 
 int main(){
-    printf("Server");
+    int fd_server = init_server(PORT);
     
     return 0;
 }
