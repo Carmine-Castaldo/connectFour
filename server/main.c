@@ -1,5 +1,5 @@
-#include "connectionController.h"
-#include "matchController.h"
+#include "controller/header/connectionController.h"
+#include "controller/header/matchController.h"
 #define PORT 8080
 
 int main(){

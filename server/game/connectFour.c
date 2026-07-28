@@ -41,7 +41,7 @@ int check_draw(Match * match){
     else return 0;
 }
 
-int check_win(Match * match, int last_move_colum) {
+int check_win(Match * match, int last_move_colum){
     int last_row = 0;
     for (; last_row < rows; last_row++)
         if (match->grid[last_row][last_move_colum] != 0)

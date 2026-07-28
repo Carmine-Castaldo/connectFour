@@ -1,5 +1,5 @@
-#include "game/connectFour.h"
-
+#include "../../game/connectFour.h"
+#include "../header/connectionController.h"
 int create_match(int fd_creator){}
 int join_match_request(int match_id, int fd_applicant){}
 void accept_or_reject_player(int match_id, int decision){}
