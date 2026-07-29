@@ -5,6 +5,11 @@
 #include <pthread.h>
 #include <unistd.h>
 #define MAX_MATCHES 50
+#define status_waiting -1
+#define status_game_on 0
+#define status_terminated 1
+#define p1_turn 0
+#define p2_turn 1
 
 int next_id_match = 0;
 Match matches[MAX_MATCHES];
@@ -37,14 +42,14 @@ int create_match(int fd_creator){
     to_add.moves = 0;
     to_add.player1 = &fd_creator;
     to_add.player2 = NULL;
-    to_add.state = -1;
+    to_add.state = status_waiting;
     to_add.id_match = next_id_match++;
 
     if(i >= MAX_MATCHES)
         printf("Superato il numero di parite massimo\n");
     else{
         matches[i] = to_add;
-        printf("Partita Creata\n");
+        printf("Partita %d Creata\n", matches[i].id_match);
     }
     fflush(stdout);
 
@@ -52,22 +57,53 @@ int create_match(int fd_creator){
     return i < MAX_MATCHES;
 }
 
-int handle_msg(int client_socket, char * buffer){
-    
-    buffer[strcspn(buffer, "\r\n")] = '\0';
-    fflush(stdout); 
+int join_match_request(int id_match, int fd_applicant){
+    pthread_mutex_lock(&mutex_match);
+    int i = 0;
+    printf("looking for match\n");
+    while((i < MAX_MATCHES) && (matches[i].id_match != id_match)){
+        i++;
+        printf("%d\n", i);
+    }
+    if( i >= MAX_MATCHES)
+        printf("Partita inesistente\n");
+    else if(matches[i].state != status_waiting){
+        printf("Partita terminata o in corso");
+    }else{
+        printf("Match found\n");
+        matches[i].fd_giocatore2 = fd_applicant;
+        matches[i].player2 = &fd_applicant;
+        matches[i].state = status_game_on;
+        matches[i].turn = p1_turn;
+    }
+    sleep(3);
+    if(matches[i].state == status_game_on){
+        printf("La partita: %d è iniziata\n", matches[i].id_match);
+        printf("player1: %d player 2: %d\n", matches[i].fd_giocatore1, matches[i].fd_giocatore2);
+    }
 
-    printf("HANDLING: %s\n", buffer); 
-
-    if(strcmp(buffer, "CREATE") == 0)
-        create_match(client_socket);
-    else if(strcmp(buffer, "DISCONNECT") == 0)
-        printf("DISCONNECT");
-    else
-        printf("COMANDO ERRATO ");
+    pthread_mutex_unlock(&mutex_match);
 }
 
-int join_match_request(int match_id, int fd_applicant){}
+int handle_msg(int client_socket, char * buffer){
+    printf("HANDLING: %s\n", buffer);
+    buffer[strcspn(buffer, "\r\n")] = '\0';
+    fflush(stdout); 
+    int id_match;
+    if(strcmp(buffer, "CREATE") == 0)
+        create_match(client_socket);
+    else if(sscanf(buffer, "JOIN %d\n", &id_match) == 1){
+        printf("Joining %d\n", id_match);
+        join_match_request(id_match, client_socket);
+    }
+    else if(strcmp(buffer, "DISCONNECT") == 0)
+        printf("DISCONNECT\n");
+    else
+        printf("COMANDO ERRATO\n");
+}
+
+
+
 void accept_or_reject_player(int match_id, int decision){}
 void play_turn(int match_id, int column){}
 void end_match(int match_id, int result){}

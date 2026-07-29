@@ -54,17 +54,17 @@ class UI:
                 col = parts[1]
                 print(f'MOVE {col}')
                 self.network.move(col)
-            pass
-        elif command =='JOIN':
+            
+        elif command == 'JOIN':
             if len(parts) > 1 and parts[1].isdigit():
                 id_match = parts[1]
                 print(f'JOIN {id_match}')
                 self.network.join_match(id_match)
-            pass
+            
         elif command == 'DISCONNECT':
             print('DISCONNECT')
             self.network.disconnect()
-            pass
+            
         elif command == 'CREATE':
             self.network.create_match()
             print('CREATE')
