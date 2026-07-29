@@ -30,6 +30,7 @@ int init_server(int port){
     if(sd < 0)
         perror("listen"), exit(1);
 
+    
     accept_connection(fd_server);
 
     return 0;
@@ -99,3 +100,4 @@ int handle_disconnection(int client_socket){
     //gestire i vari casi in cui un giocatore si può disconettere
     //liberare risorse
 }
+

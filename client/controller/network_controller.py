@@ -35,8 +35,8 @@ class NetworkClient:
                 #self.disconnect() da vedere
                 break
             
-            #if self.on_message_callback:
-            #   self.on_message_callback(self.msg_recv)
+            if self.on_message_callback:
+               self.on_message_callback(self.msg_recv)
 
 
             

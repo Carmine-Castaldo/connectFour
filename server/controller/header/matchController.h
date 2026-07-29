@@ -1,6 +1,7 @@
 #ifndef MATCHCONTROLLER_H
 #define MATCHCONTROLLER_H
 
+int init_matchController();
 int handle_msg(int client_socket, char * buffer);
 int create_match(int fd_creator);
 int join_match_request(int match_id, int fd_applicant);

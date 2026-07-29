@@ -22,6 +22,7 @@ class UI:
         pass
 
     def handle_msg(self, msg):
+        print(f"\n[SERVER -> CLIENT]: {msg.strip()}")
         if msg.startswith('MOVE'):
             #l'avversario ha fatto la sua mossa si deve disegnare
             pass
