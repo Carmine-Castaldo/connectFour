@@ -39,7 +39,7 @@ void *handle_client(void *client_server_socket){
     int client_socket = *(int*)client_server_socket;
     free(client_server_socket);
     
-    char * buffer;
+    char *buffer;
     
     while(1) {
         int letti = recv_msg(client_socket, buffer);

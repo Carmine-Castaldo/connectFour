@@ -1,12 +1,20 @@
 #include "../../game/connectFour.h"
-
+#include <string.h>
+#include <stdio.h>
 
 int handle_quit(int client_socket){
     //rimuovere il giocatore dalla partita e terminare la partita
 }
 int handle_msg(int client_socket, char * buffer){
-    //gestire se è creazione partita, eliminazione partita, unisciti in partita 
-    //e mossa in partita
+    buffer[strcspn(buffer, "\r\n")] = '\0';
+    printf("HANDLING: %s\n", buffer); 
+    fflush(stdout); 
+    
+    if(strcmp(buffer, "CREATE") == 0)
+        printf("CREATE");
+    else if(strcmp(buffer, "DISCONNECT") == 0)
+        printf("DISCONNECT");
+
 }
 
 int create_match(int fd_creator){}
