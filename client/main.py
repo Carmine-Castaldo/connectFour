@@ -1,5 +1,3 @@
-import sys
-import time
 from controller.network_controller import NetworkClient
 from UI.UI import UI
 
