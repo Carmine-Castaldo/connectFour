@@ -12,6 +12,10 @@ class UI:
         self.my_game = False
         self.board = [[0 for _ in range(7)] for _ in range(6)]
         self.response_event = threading.Event()
+        self.challenger_fd = None
+        self.pending_join_request = False
+        self.last_game = None
+        self.rematch_cancelled = False
 
     def reset_board(self):
         self.board = [[0 for _ in range(7)] for _ in range(6)]
@@ -51,28 +55,38 @@ class UI:
             col = int(parts[3])     
             self.board[row][col] = player
 
-    #TO DELETE
+    
+    def _handle_out_of_game_input(self):
+        msg = input("Inserisci Azione: ").strip()
+        if msg:
+            self.handle_input(msg)
+
+    def _handle_in_game_turn(self):
+        col_str = input("Scegli la colonna (0-6): ").strip()
+        
+        if not self.game_on:
+            return
+
+        if col_str.isdigit() and 0 <= int(col_str) <= 6:
+            self.handle_input(f"MOVE {col_str}")
+            self.my_turn = False 
+        elif col_str == 'QUIT':
+            self.handle_input(col_str)
+        else:
+            print("Scegli una colonna valida tra 0 e 6")
+
     def input_terminal(self):
         while True:
             if not self.game_on:
-                msg = input("Inserisci Azione: ").strip()
-                if msg:
-                    self.handle_input(msg)
+                if getattr(self, 'last_game', None) is not None:
+                    self.handle_game_over()
+                else:
+                    self._handle_out_of_game_input()
+            elif self.my_turn:
+                self._handle_in_game_turn()
             else:
-
-                if self.my_turn:
-                    col_str = input("Scegli la colonna (0-6): ").strip()
-                    
-                    if not self.game_on:
-                        continue
-
-                    if col_str.isdigit() and 0 <= int(col_str) <= 6:
-                        self.handle_input(f"MOVE {col_str}")
-                        self.my_turn = False 
-                    else:
-                        print("Scegli una colonna valida tra 0 e 6")
-                else:    
-                    time.sleep(0.2)    
+                time.sleep(0.2)   
+        print("Connessione Interrotta")
 
 
     def handle_msg(self, msg):
@@ -88,22 +102,52 @@ class UI:
             self.game_on = True
             self.draw("IT IS YOUR TURN")
             self.response_event.set()
+
         elif msg == "WAIT TURN":
             self.my_turn = False
             self.game_on = True
             self.draw("WAITING FOR OPPONENT MOVE")
             self.response_event.set()
-        elif msg in ["WIN", "LOSE", "DRAW"]:
 
+        elif msg in ["WIN", "LOSE", "DRAW", "OPPONENT_DISCONNECTED"]:
+            self.last_game = msg
             if msg == "WIN":
                 print("WIN\n")
             elif msg == "LOSE":
                 print("LOSE\n")
             elif msg == "DRAW":
-                print("DRAW\n")    
+                print("DRAW\n")   
+            else: 
+                print("OPPONENT DISCONNECTED, YOU WIN\n")
+                self.last_game = None
+
             self.reset_board()  
-            
-            # dovrrebbero esserci anche le notifiche per le partite terminate/in corso
+            self.game_on = False 
+            self.rematch_cancelled = False 
+            self.response_event.set()            
+        elif msg.startswith("JOIN_REQUEST"):
+            parts = msg.split()
+            self.challenger_fd = parts[1] if len(parts) > 1 else "UNKNOWN"
+            self.pending_join_request = True
+            self.response_event.set()
+        elif msg == "REMATCH_START":
+            self.game_on = True
+            self.reset_board()
+            print("\nSTARTIGN THE REMATCH")
+            self.response_event.set()
+
+        elif msg == "OPPONENT_WANTS_REMATCH":
+            print("\nOPPONENT ASK FOR A REMATCH")
+
+        elif msg == "REMATCH_DECLINED":
+            print("\nREMATCH DECLINED")
+            self.rematch_cancelled = True
+            self.game_on = False
+            self.response_event.set()
+
+        else:
+            print(f"\n{msg}")
+            print("Inserisci azione: ", end="", flush=True)
 
     def handle_input(self, msg):
         parts = msg.strip().split()
@@ -128,21 +172,67 @@ class UI:
                 self.response_event.clear()
                 self.network.join_match(id_match)
                 self.response_event.wait(timeout=2.0)
-                
-            
         elif command == 'DISCONNECT':
-            print('DISCONNECT')
             self.network.disconnect()
-            
+            os._exit(0)
         elif command == 'CREATE':
             self.reset_board()
             self.my_game = True
             self.response_event.clear()
             self.network.create_match()
-            self.response_event.wait(timeout=2.0)
-            print('CREATE\n')
-        #move, disconnection, join, create, ... ? 
+
+            ans = self.response_event.wait(timeout=2.0)
+            if ans:
+                self.wait_for_challenger()
+                print('CREATE\n')
+            else:
+                self.my_game = False
+        elif command == 'QUIT':
+            self.game_on = False
+            self.clear_screen()
+            self.network.quit()
+            
         
+    def wait_for_challenger(self):
+        self.pending_join_request = False
+        self.game_on = True 
+        while self.game_on:
+            self.response_event.wait()
+            self.response_event.clear()
+            if getattr(self, 'pending_join_request', False):
+                print(f"\n JOIN REQUEST FROM {self.challenger_fd})")
+                
+                scelta = ""
+                while scelta not in ["ACCEPT", "REJECT"]:
+                    scelta = input("DO U ACCEPT? (ACCEPT/REJECT): ").strip()
+                
+                if scelta == 'ACCEPT':
+                    self.network.accept()
+                    self.pending_join_request = False
+                    break 
+                else:
+                    self.network.reject()
+                    self.pending_join_request = False
+                    self.draw("WAITING FOR OPPONENT MOVE") 
+                    
+    def handle_game_over(self):
+        self.last_game = None
+        ans = ""
+        while ans not in ["REMATCH", "EXIT"]:
+            ans = input("\nDo you want a rematch? (REMATCH/EXIT): ").strip()
 
-                        
-
+        if ans == 'REMATCH':
+            if self.rematch_cancelled:
+                print("REMATCH REJECTED")
+                return False
+            
+            print("WAITING FOR OPPONENT")
+            self.response_event.clear()
+            self.network.send_msg("REMATCH_ACCEPT")
+            self.response_event.wait()
+            return self.game_on  
+        
+        else:
+            self.network.send_msg("REMATCH_DECLINE")
+            self.game_on = False
+            return False 

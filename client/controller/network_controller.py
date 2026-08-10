@@ -1,8 +1,9 @@
 
-import socket
+import socket, os
 import threading
 
 class NetworkClient:
+
 
     def __init__(self, on_message_callback=None, host='127.0.0.1', port=8080):
         self.host = host
@@ -23,20 +24,35 @@ class NetworkClient:
             return True
         except Exception: 
             print("Connessione fallita")
+            os._exit(0)
             return False
 
 
     def listen_server(self):
+        data_buffer = ""
         while True:
-            self.recv_msg()
-            if not self.msg_recv:
-                print("Connessione interrota")
+            try:
+                chunk = self.socket.recv(1024).decode('utf-8')
+                if not chunk:
+                    print("Connessione interrotta")
+                    self.running = False
+                    os._exit(0)
+                    break
+                
+                data_buffer += chunk
+                while "\n" in data_buffer:
+                    line, data_buffer = data_buffer.split("\n", 1)
+                    line = line.strip()
+                    if line:
+                        self.msg_recv = line
+                        if self.on_message_callback:
+                            self.on_message_callback(self.msg_recv)
+                            
+            except Exception as e:
+                print(f"Errore di connessione: {e}")
                 self.running = False
-                #self.disconnect() da vedere
+                os._exit(0)
                 break
-            
-            if self.on_message_callback:
-               self.on_message_callback(self.msg_recv)
 
 
             
@@ -55,9 +71,17 @@ class NetworkClient:
        
     def move(self, col: int):
         self.send_msg(f'MOVE {col}')
-        
+
+    def quit(self):
+        self.send_msg("QUIT")
+
     def disconnect(self):
         self.send_msg('DISCONNECT')
         
+    def accept(self):
+        self.send_msg("ACCEPT")
+
+    def reject(self):
+            self.send_msg("REJECT")
 
 

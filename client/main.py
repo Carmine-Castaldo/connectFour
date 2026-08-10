@@ -10,6 +10,7 @@ def main():
     else:
         print("Disconnesso")
     ui.input_terminal()
+    
 
 
 if __name__ == "__main__":

@@ -1,3 +1,5 @@
+#include <pthread.h>
+
 #ifndef CONNECTFOUR_H
 #define CONNECTFOUR_H
 
@@ -9,9 +11,11 @@ typedef struct{
     int id_match, state;
     int * player1, * player2;
     int fd_giocatore1, fd_giocatore2;
+    int p1_rematch, p2_rematch;
     int turn, moves;
     int grid[7][6];
-
+    int join_status;            
+    pthread_cond_t cond_join;
 } Match;
 
 void init_match(Match * match);
