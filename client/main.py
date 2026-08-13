@@ -1,17 +1,17 @@
 from controller.network_controller import NetworkClient
-from UI.UI import UI
+import threading
+from UI.GUI import GUI
 
 def main():
-    network = NetworkClient()
-    ui = UI(network)
-    network.on_message_callback=ui.handle_msg
-    if network.connect():
-        print("Connesso")
-    else:
-        print("Disconnesso")
-    ui.input_terminal()
+    network = NetworkClient(host="127.0.0.1", port=8080) 
+    if not network.connect():
+        print("Connessione Fallita")
+        return
+    gui = GUI(network)
+    network_thread = threading.Thread(target=network.listen_server, daemon=True)
+    network_thread.start()
     
-
+    gui.start()
 
 if __name__ == "__main__":
     main()

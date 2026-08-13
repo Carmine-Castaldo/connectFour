@@ -7,6 +7,7 @@ int handle_disconnection(int client_socket);
 void *handle_client(void *client_server);
 int send_msg(int client_socket, char *msg);
 int recv_msg(int client_socket, char *buffer);
-void broadcast(char * msg, int exclude_fd1, int exclude_fd2);
+void broadcast(char * msg);
+void broadcast_except(char * msg, int except_fd);
 
 #endif

@@ -2,7 +2,7 @@
     #include "connectFour.h"
 
 
-    int insertDisc(Match * match,int colum, int num_player){
+    int insertDisc(Match * match, int colum, int num_player){
         int row = get_empy_row(match, colum);
         if( row != -1){
             match->grid[row][colum] = num_player;

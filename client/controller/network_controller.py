@@ -3,8 +3,7 @@ import socket, os
 import threading
 
 class NetworkClient:
-
-
+ 
     def __init__(self, on_message_callback=None, host='127.0.0.1', port=8080):
         self.host = host
         self.port = port
@@ -54,7 +53,7 @@ class NetworkClient:
                 os._exit(0)
                 break
 
-
+                
             
     def recv_msg(self):
         self.msg_recv = self.socket.recv(1024).decode('utf-8')
@@ -68,6 +67,7 @@ class NetworkClient:
 
     def join_match(self, id_match: int):
         self.send_msg(f'JOIN {id_match}')
+
        
     def move(self, col: int):
         self.send_msg(f'MOVE {col}')

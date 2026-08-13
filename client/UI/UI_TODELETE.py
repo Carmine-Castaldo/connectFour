@@ -3,7 +3,7 @@ import time
 import threading
 import os
 
-class UI:
+class UITODELETE:
     
     def __init__(self, network):
         self.network = network

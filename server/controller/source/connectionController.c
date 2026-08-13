@@ -66,7 +66,7 @@ void *handle_client(void *client_server_socket) {
     
         if (letti <= 0) {
             printf("HANDLE DISCONNECTION OF %d\n", client_socket);
-            handle_client_exit(client_socket);
+            handle_client_disconnect(client_socket);
             break; 
         }
 
@@ -77,7 +77,6 @@ void *handle_client(void *client_server_socket) {
             break;
         
     }
-
     close(client_socket); 
     pthread_exit(NULL);   
 }
@@ -145,36 +144,22 @@ int recv_msg(int client_socket, char *buffer){
     return n_bytes;
 }
 
-int handle_disconnection(int client_socket){
-    pthread_mutex_lock(&mutex_clients);
-        for (int i = 0; i < MAX_CLIENT; i++) {
-        if (clients[i] == client_socket) {
-            clients[i] = -1; 
-            break;
-        }
-    }
-    pthread_mutex_unlock(&mutex_clients);
 
-    int id_match = -1;
-    int id_opp = get_match_and_opponent(client_socket, &id_match);
-
-    if (id_match != -1) {
-        if (id_opp != -1) 
-            send_msg(id_opp, "OPPONENT_DISCONNECTED");
-        reset_match(id_match);    
-    }
-    
-    printf("Client socket %d disconnected\n", client_socket);
-    shutdown(client_socket, SHUT_RDWR);
-    return 0; 
-}
-
-void broadcast(char * msg, int exclude_fd1, int exclude_fd2){
+void broadcast(char * msg){
     pthread_mutex_lock(&mutex_clients);
 
         for(int i = 0; i < MAX_CLIENT; i++)
-            if(clients[i] != -1 && clients[i] != exclude_fd1 && clients[i] != exclude_fd2)
+            if(clients[i] != -1)
                 send_msg(clients[i], msg);
+        
+    pthread_mutex_unlock(&mutex_clients);
+}
+
+void broadcast_except(char * msg, int excluded_socket) {
+    pthread_mutex_lock(&mutex_clients);
+    for (int i = 0; i < MAX_CLIENT; i++) 
+        if (clients[i] != -1 && clients[i] != excluded_socket) 
+            send_msg(clients[i], msg);
         
     pthread_mutex_unlock(&mutex_clients);
 }
