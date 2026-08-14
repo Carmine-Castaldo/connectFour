@@ -179,7 +179,6 @@ int request_to_creator(int id_match, int client_req) {
     snprintf(msg, sizeof(msg), "JOIN_REQUEST %d", client_req);
     send_msg(match->fd_giocatore1, msg);
     snprintf(msg, sizeof(msg), "ROOM %d IS BUSY", id_match);
-    
     broadcast_except(msg, client_req);
 
     while (match->join_status == 0)
@@ -386,9 +385,8 @@ void handle_quit(int client_socket){
         }
         char msg[64];
         snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", id_match);
-        broadcast(msg);
-        
         pthread_mutex_unlock(&mutex_match);
+        broadcast(msg);
         reset_match(id_match);
     } else {
         pthread_mutex_unlock(&mutex_match);
@@ -491,10 +489,11 @@ void restart_match(Match * match){
 
 void send_all_matches_to_client(int client_socket) {
     pthread_mutex_lock(&mutex_match);
-    
+    printf("SENDING MATCHES to %d\n", client_socket);
     for (int i = 0; i < MAX_MATCHES; i++) {
         if (matches[i].id_match != -1) {
-            char msg;
+            printf("SENDING MATCH %d\n", matches[i].id_match);
+            char msg[64];
             const char *state_str = "WAITING";
             if (matches[i].state == status_game_on) 
                 state_str = "BUSY";

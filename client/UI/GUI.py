@@ -2,16 +2,18 @@ import tkinter as tk
 from tkinter import messagebox
 import queue
 import re
-import os
+import os, platform
 from UI import config as cfg
 
 class GUI:
     def __init__(self, network_controller):
         self.network = network_controller
-    
         self.network.on_message_callback = self.enqueue_message
         self.gui_queue = queue.Queue()
-        
+        if hasattr(self.network, 'safe_queue'):
+            while not self.network.safe_queue.empty():
+                msg = self.network.safe_queue.get()
+                self.enqueue_message(msg)
         self.game_on = False
         self.my_turn = False
         self.my_game = False
@@ -31,7 +33,7 @@ class GUI:
         self.known_matches = {}
         self.current_match_id = None
         self.game_frame = None
-        
+        self.load_arcade_font()
         self.show_lobby_screen()
         
         self.root.after(100, self.process_queue)
@@ -104,7 +106,7 @@ class GUI:
         self.lobby_scrollbar.pack(side="right", fill="y")
         
         self.match_cards = {}
-        for m_id, status in self.known_matches.items():
+        for m_id, status in reversed(list(self.known_matches.items())):
             self.draw_match_card(m_id, status)
         
         self.status_label = tk.Label(self.lobby_frame, text=cfg.TXT_LOBBY_STATUS_DEFAULT, font=cfg.FONT_LABEL_SMALL, fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
@@ -123,10 +125,7 @@ class GUI:
         self.disable_buttons()
 
     def on_closing(self):
-        try:
-            self.network.disconnect() 
-        except:
-            pass
+        self.network.disconnect() 
         os._exit(0)
 
     def on_quit_match(self):
@@ -148,32 +147,46 @@ class GUI:
         self.game_frame = tk.Frame(self.root, bg=cfg.COLOR_BG)
         self.game_frame.pack(expand=True, fill="both")
         
-        self.turn_label = tk.Label(self.game_frame, text="READY...", font=cfg.FONT_LABEL_LARGE, fg=cfg.COLOR_TEXT_WHITE, bg=cfg.COLOR_BG)
-        self.turn_label.pack(pady=15)
+        self.turn_label = tk.Label(
+            self.game_frame, 
+            text="READY...", 
+            font=cfg.FONT_LABEL_LARGE, 
+            fg=cfg.COLOR_TEXT_WHITE, 
+            bg=cfg.COLOR_BG
+        )
+        self.turn_label.pack(pady=20)
         
-        self.button_frame = tk.Frame(self.game_frame, bg=cfg.COLOR_BG)
-        self.button_frame.pack()
-        
-        self.col_buttons = []
-        for col in range(7):
-            btn = tk.Button(self.button_frame, text="V", font=cfg.FONT_BTN_LARGE, width=3, 
-                            bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_NEON, activebackground=cfg.COLOR_TEXT_NEON,
-                            activeforeground=cfg.COLOR_BG, bd=2, relief="flat", highlightbackground=cfg.COLOR_BTN_BORDER,
-                            command=lambda c=col: self.make_move(c))
-            btn.grid(row=0, column=col, padx=14, pady=5)
-            self.col_buttons.append(btn)
-            
-        self.canvas = tk.Canvas(self.game_frame, width=490, height=420, bg=cfg.COLOR_BG_BOARD, highlightthickness=4, highlightbackground=cfg.COLOR_CABINET_BLUE)
+        self.canvas = tk.Canvas(
+            self.game_frame, 
+            width=980, 
+            height=810, 
+            bg=cfg.COLOR_BG_BOARD, 
+            highlightthickness=6, 
+            highlightbackground=cfg.COLOR_CABINET
+        )
         self.canvas.pack(pady=10)
-        
-        btn_quit = tk.Button(self.game_frame, text=cfg.TXT_QUIT_BTN, font=cfg.FONT_BTN_SMALL, 
-                            bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_PINK, activebackground=cfg.COLOR_TEXT_PINK,
-                            activeforeground=cfg.COLOR_BG, bd=2, relief="flat", highlightbackground=cfg.COLOR_TEXT_PINK,
-                            command=self.on_quit_match)
-        btn_quit.pack(pady=10)
-            
-        self.draw_graphic_board()
 
+        self.canvas.bind("<Button-1>", self.on_canvas_click)
+        self.canvas.bind("<Motion>", self.on_canvas_hover)
+        self.canvas.bind("<Leave>", self.on_canvas_leave)
+
+        btn_quit = tk.Button(
+            self.game_frame, 
+            text=cfg.TXT_QUIT_BTN, 
+            font=cfg.FONT_BTN_SMALL, 
+            bg=cfg.COLOR_BG, 
+            fg=cfg.COLOR_TEXT_PINK, 
+            activebackground=cfg.COLOR_TEXT_PINK,
+            activeforeground=cfg.COLOR_BG, 
+            bd=2, 
+            relief="flat", 
+            highlightbackground=cfg.COLOR_TEXT_PINK,
+            command=self.on_quit_match
+        )
+        btn_quit.pack(pady=20)
+        
+        self.draw_graphic_board()
+        
         if self.my_turn:
             self.turn_label.config(text=cfg.MSG_YOUR_TURN, fg=cfg.COLOR_TEXT_NEON)
             self.enable_buttons()
@@ -185,10 +198,7 @@ class GUI:
         self.canvas.delete("all")
         for r in range(6):
             for c in range(7):
-                x1, y1 = c * 70 + 10, r * 70 + 10
-                x2, y2 = x1 + 50, y1 + 50
-                self.canvas.create_oval(x1, y1, x2, y2, fill=cfg.COLOR_CIRCLE_EMPTY, outline=cfg.COLOR_CABINET_BLUE, width=3)
-                self.circles[r][c] = (x1, y1, x2, y2) 
+                self.draw_disc(r,c)
 
     def update_board(self, msg):
         parts = msg.strip().split()
@@ -215,33 +225,21 @@ class GUI:
         self.canvas.create_oval(x1+8, y1+8, x1+16, y1+16, fill="#ffffff", outline="", width=0)
 
 
-
     def reset_graphic_board(self):
         self.reset_board()
         if getattr(self, 'canvas', None) is not None:
             self.draw_graphic_board()
 
-    def sync_board_graphic(self):
-        self.draw_graphic_board()
-        for r in range(6):
-            for c in range(7):
-                val = self.board[r][c]
-                if val != 0:
-                    self.update_board_graphic(r, c, val)
-
 
 
     def enable_buttons(self):
-        i = 0
-        for btn in self.col_buttons:
-            if self.board[0][i] == 0:
-                btn.config(state="normal", fg=cfg.COLOR_TEXT_NEON)
-            i+=1
+        if hasattr(self, 'canvas') and self.canvas.winfo_exists():
+            self.canvas.config(cursor="hand2")
 
     def disable_buttons(self):
-        for btn in self.col_buttons:
-            btn.config(state="disabled", fg=cfg.COLOR_TEXT_MUTED)
-
+        if hasattr(self, 'canvas') and self.canvas.winfo_exists():
+            self.canvas.config(cursor="")
+            self.canvas.delete("hover_highlight")
 
     def handle_server_message(self, msg):
         msg = msg.strip()
@@ -303,7 +301,7 @@ class GUI:
 
         elif msg.startswith("UPDATE_BOARD"):
             self.update_board(msg) 
-            self.sync_board_graphic()
+            self.draw_graphic_board()
             if getattr(self, 'turn_label', None) is not None:
                 if self.my_turn:
                     self.turn_label.config(text=cfg.MSG_YOUR_TURN, fg=cfg.COLOR_TEXT_NEON)
@@ -368,7 +366,7 @@ class GUI:
         elif msg == "REMATCH_START":
             self.game_on = True
             self.reset_board()
-            self.sync_board_graphic()
+            self.draw_graphic_board()
             if getattr(self, 'turn_label', None) is not None:
                 self.turn_label.config(text=cfg.MSG_REMATCH_ACCEPTED, fg=cfg.COLOR_TEXT_NEON)
 
@@ -381,7 +379,21 @@ class GUI:
             messagebox.showinfo(cfg.POPUP_TITLE_REMATCH_CANCEL, cfg.POPUP_MSG_REMATCH_CANCEL)
             self.show_lobby_screen()
         elif msg.startswith("ROOM"):
-            self.update_match_card_busy(msg)
+            print(f"msg: {msg}\n")
+            try:
+                parts = msg.strip().split()
+                if len(parts) >= 3:
+                    print(f"msg: {msg}\n")
+                    match_id_str = parts[1]
+                    match_id_int = int(match_id_str)
+                    is_creator = getattr(self, 'my_game', False) and str(self.current_match_id) == str(match_id_str)
+                    if not is_creator:
+                        if match_id_int not in self.match_cards and match_id_str not in self.match_cards:
+                            if self.lobby_frame:
+                                self.draw_match_card(match_id_str, "AVAILABLE")
+                    self.update_match_card_busy(msg)                    
+            except Exception as e:
+                print(f"Errore nella gestione del messaggio ROOM: {e}")
         else:
             if getattr(self, 'status_label', None) is not None:
                 self.status_label.config(text=msg, fg=cfg.COLOR_TEXT_WHITE)
@@ -414,7 +426,7 @@ class GUI:
 
 
     def draw_match_card(self, match_id, status):
-        card = tk.Frame(self.rooms_container, bg=cfg.COLOR_BG_BOARD, bd=1, relief="solid", highlightbackground=cfg.COLOR_CABINET_BLUE, highlightthickness=1)
+        card = tk.Frame(self.rooms_container, bg=cfg.COLOR_BG_BOARD, bd=1, relief="solid", highlightbackground=cfg.COLOR_CABINET, highlightthickness=1)
         card.pack(fill="x", padx=10, pady=5)
         
         lbl_id = tk.Label(card, text=f"ROOM #{match_id}", font=cfg.FONT_LABEL_MEDIUM, fg=cfg.COLOR_TEXT_WHITE, bg=cfg.COLOR_BG_BOARD)
@@ -489,7 +501,8 @@ class GUI:
                 highlightbackground=cfg.COLOR_BTN_BORDER,
                 command=lambda: [popup.destroy(), self.show_lobby_screen()]
             )
-            btn_ok.pack(pady=10)    
+            btn_ok.pack(pady=10) 
+
     def update_match_card_busy(self, msg):
         try:
             parts = msg.strip().split()
@@ -502,7 +515,6 @@ class GUI:
             if hasattr(self, 'match_cards'):
                 card = self.match_cards.get(match_id_int) or self.match_cards.get(match_id_str)
                 if card:
-
                     frame = card.get("frame")
                     if frame and not frame.winfo_exists():
                         self.match_cards.pop(match_id_int, None)
@@ -527,3 +539,194 @@ class GUI:
                     print(f"Card non trovata per match_id {match_id_str}. Chiavi presenti: {list(self.match_cards.keys())}")
         except Exception as e:
             print(f"Errore update_match_card_busy: {e}")
+
+
+    def on_canvas_click(self, event):
+        if not self.my_turn:
+            return
+        col = event.x // 140
+        if 0 <= col < 7:
+            self.canvas.delete("hover_highlight")
+            self.make_move(col)
+
+    def on_canvas_hover(self, event):
+        if not self.my_turn:
+            self.canvas.delete("hover_highlight")
+            self.canvas.config(cursor="")
+            return
+            
+        col = event.x // 140
+        if 0 <= col < 7:
+            self.canvas.config(cursor="hand2")
+            self.canvas.delete("hover_highlight")
+            my_color = cfg.COLOR_TEXT_PINK if getattr(self, 'my_game', False) else cfg.COLOR_TEXT_NEON
+            self.canvas.create_rectangle(
+                col * 140 + 4, 4,
+                (col + 1) * 140 - 4, 806,
+                outline=my_color,
+                fill=my_color,
+                stipple="gray12",
+                width=3,
+                tags="hover_highlight"
+            )
+        else:
+            self.canvas.delete("hover_highlight")
+            self.canvas.config(cursor="")
+
+
+    def on_canvas_leave(self, event):
+        self.canvas.delete("hover_highlight")
+
+    def load_arcade_font(self):
+        
+        font_filename = "ARCADECLASSIC.TTF"
+
+        if not os.path.exists(font_filename):
+            print(f" {font_filename} NOT FOUND")
+            return "Arial"
+            
+        try:
+            if platform.system() == "Linux":
+                home_dir = os.path.expanduser("~")
+                user_fonts_dir = os.path.join(home_dir, ".fonts")
+                
+                if not os.path.exists(user_fonts_dir):
+                    os.makedirs(user_fonts_dir)
+                    
+                dest_font_path = os.path.join(user_fonts_dir, font_filename)
+                if not os.path.exists(dest_font_path):
+                    import shutil
+                    shutil.copy(font_filename, dest_font_path)
+                    os.system("fc-cache -f")
+                
+        except Exception as e:
+            print(f"ERROR FONT: {e}")
+            
+            
+        return "ArcadeClassic"
+
+    def draw_disc(self,r,c):
+        center_x = c * cfg.CELL_WIDTH + (cfg.CELL_WIDTH / 2)
+        center_y = r * cfg.CELL_HEIGHT + (cfg.CELL_HEIGHT / 2)
+        x1 = center_x - (cfg.DIAMETER / 2)
+        y1 = center_y - (cfg.DIAMETER / 2)
+        x2 = center_x + (cfg.DIAMETER / 2)
+        y2 = center_y + (cfg.DIAMETER / 2)
+        self.circles[r][c] = (x1, y1, x2, y2)
+        cell_value = self.board[r][c]
+        if cell_value == 1:
+            fill_color = cfg.COLOR_TEXT_PINK
+            outline_color = cfg.COLOR_TEXT_PINK
+        elif cell_value == 2:
+            fill_color = cfg.COLOR_TEXT_NEON
+            outline_color = cfg.COLOR_TEXT_NEON
+        else:
+            fill_color = cfg.COLOR_CIRCLE_EMPTY
+            outline_color = cfg.COLOR_CABINET
+            
+        self.canvas.create_oval(
+            x1, y1, x2, y2, 
+            fill=fill_color, 
+            outline=outline_color, 
+            width=4)
+        
+        if cell_value == 1:
+            base_color = cfg.COLOR_TEXT_PINK
+            dark_color = getattr(cfg, 'COLOR_P1_DARK', "#990033")
+            light_color = "#ff80aa" 
+            self.canvas.create_oval(
+                x1 + 4, y1 + 4, x2 + 2, y2 + 2, 
+                fill="#05050d", outline=""
+            )
+            self.canvas.create_oval(
+                x1, y1, x2, y2, 
+                fill=dark_color, outline=dark_color
+            )
+            self.canvas.create_oval(
+                x1 + 3, y1 + 3, x2 - 3, y2 - 3, 
+                fill=base_color, outline=""
+            )
+            r_val_1 = cfg.DIAMETER * 0.12
+            self.canvas.create_oval(
+                x1 + r_val_1, y1 + r_val_1, x2 - r_val_1, y2 - r_val_1, 
+                fill=dark_color, outline=""
+            )
+            r_val_2 = cfg.DIAMETER * 0.20
+            self.canvas.create_oval(
+                x1 + r_val_2, y1 + r_val_2, x2 - r_val_2, y2 - r_val_2, 
+                fill=base_color, outline=""
+            )
+            hl1_w = cfg.DIAMETER * 0.26
+            hl1_h = cfg.DIAMETER * 0.16
+            hx1 = center_x - (cfg.DIAMETER * 0.22) - (hl1_w / 2)
+            hy1 = center_y - (cfg.DIAMETER * 0.24) - (hl1_h / 2)
+            hx2 = hx1 + hl1_w
+            hy2 = hy1 + hl1_h
+            self.canvas.create_oval(
+                hx1, hy1, hx2, hy2, 
+                fill=cfg.COLOR_TEXT_WHITE, outline=""
+            )
+            hl2_size = cfg.DIAMETER * 0.10
+            bx1 = center_x + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
+            by1 = center_y + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
+            bx2 = bx1 + hl2_size
+            by2 = by1 + hl2_size
+            self.canvas.create_oval(
+                bx1, by1, bx2, by2, 
+                fill=light_color, outline=""
+            )
+            
+        elif cell_value == 2:
+            base_color = cfg.COLOR_TEXT_NEON
+            dark_color = getattr(cfg, 'COLOR_P2_DARK', "#006699")
+            light_color = "#80ffff" 
+            self.canvas.create_oval(
+                x1 + 4, y1 + 4, x2 + 2, y2 + 2, 
+                fill="#05050d", outline=""
+            )
+            self.canvas.create_oval(
+                x1, y1, x2, y2, 
+                fill=dark_color, outline=dark_color
+            )
+            self.canvas.create_oval(
+                x1 + 3, y1 + 3, x2 - 3, y2 - 3, 
+                fill=base_color, outline=""
+            )
+            r_val_1 = cfg.DIAMETER * 0.12
+            self.canvas.create_oval(
+                x1 + r_val_1, y1 + r_val_1, x2 - r_val_1, y2 - r_val_1, 
+                fill=dark_color, outline=""
+            )
+            r_val_2 = cfg.DIAMETER * 0.20
+            self.canvas.create_oval(
+                x1 + r_val_2, y1 + r_val_2, x2 - r_val_2, y2 - r_val_2, 
+                fill=base_color, outline=""
+            )
+            hl1_w = cfg.DIAMETER * 0.26
+            hl1_h = cfg.DIAMETER * 0.16
+            hx1 = center_x - (cfg.DIAMETER * 0.22) - (hl1_w / 2)
+            hy1 = center_y - (cfg.DIAMETER * 0.24) - (hl1_h / 2)
+            hx2 = hx1 + hl1_w
+            hy2 = hy1 + hl1_h
+            self.canvas.create_oval(
+                hx1, hy1, hx2, hy2, 
+                fill=cfg.COLOR_TEXT_WHITE, outline=""
+            )
+            hl2_size = cfg.DIAMETER * 0.10
+            bx1 = center_x + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
+            by1 = center_y + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
+            bx2 = bx1 + hl2_size
+            by2 = by1 + hl2_size
+            self.canvas.create_oval(
+                bx1, by1, bx2, by2, 
+                fill=light_color, outline=""
+            ) 
+        else:
+            fill_color = cfg.COLOR_CIRCLE_EMPTY
+            outline_color = cfg.COLOR_CABINET
+            self.canvas.create_oval(
+                x1, y1, x2, y2, 
+                fill=fill_color, 
+                outline=outline_color, 
+                width=4
+            )

@@ -59,10 +59,10 @@ void *handle_client(void *client_server_socket) {
 
     int client_socket = *(int*)client_server_socket;
     free(client_server_socket);
-    char buffer[1024];
+    printf("NEW CONNECTION OF %d\n", client_socket);
+    send_all_matches_to_client(client_socket);
 
-    
-    
+    char buffer[1024];    
     while (1) {
         memset(buffer, 0, sizeof(buffer));
 

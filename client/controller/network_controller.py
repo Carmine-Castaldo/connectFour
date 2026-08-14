@@ -1,15 +1,16 @@
 
 import socket, os
-import threading
+import threading, queue
 
 class NetworkClient:
  
     def __init__(self, on_message_callback=None, host='127.0.0.1', port=8080):
+        self.on_message_callback = on_message_callback
+        self.safe_queue = queue.Queue()
         self.host = host
         self.port = port
         self.socket = None
         self.running = False
-        self.on_message_callback = on_message_callback
         
     def connect(self):
         try: 
@@ -29,7 +30,7 @@ class NetworkClient:
 
     def listen_server(self):
         data_buffer = ""
-        while True:
+        while self.running:
             try:
                 chunk = self.socket.recv(1024).decode('utf-8')
                 if not chunk:
@@ -43,16 +44,16 @@ class NetworkClient:
                     line, data_buffer = data_buffer.split("\n", 1)
                     line = line.strip()
                     if line:
-                        self.msg_recv = line
                         if self.on_message_callback:
-                            self.on_message_callback(self.msg_recv)
+                            self.on_message_callback(line)
+                        else:
+                            self.safe_queue.put(line)
                             
             except Exception as e:
                 print(f"Errore di connessione: {e}")
                 self.running = False
                 os._exit(0)
                 break
-
                 
             
     def recv_msg(self):

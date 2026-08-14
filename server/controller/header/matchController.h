@@ -24,4 +24,6 @@ void handle_accept(int client_socket);
 void handle_reject(int client_socket);
 void handle_rematch_accept(int client_socket);
 void handle_rematch_declined(int client_socket);
+
+void send_all_matches_to_client(int client_socket);
 #endif
