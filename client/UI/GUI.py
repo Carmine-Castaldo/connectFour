@@ -3,7 +3,10 @@ from tkinter import messagebox
 import queue
 import re
 import os, platform
-from UI import config as cfg
+from UI.components import config as cfg 
+from UI.components.board import Board
+from UI.components.disc import Disc
+
 
 class GUI:
     def __init__(self, network_controller):
@@ -27,12 +30,12 @@ class GUI:
         self.root.configure(bg=cfg.COLOR_BG)
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.board = [[0 for _ in range(7)] for _ in range(6)]
         self.circles = [[None for _ in range(7)] for _ in range(6)] 
         self.lobby_frame = None
         self.known_matches = {}
         self.current_match_id = None
         self.game_frame = None
+        self.board = Board()
         self.load_arcade_font()
         self.show_lobby_screen()
         
@@ -195,10 +198,13 @@ class GUI:
             self.disable_buttons()
 
     def draw_graphic_board(self):
+        if not hasattr(self, 'canvas') or self.canvas is None:
+            return
         self.canvas.delete("all")
-        for r in range(6):
-            for c in range(7):
-                self.draw_disc(r,c)
+        for r in range(self.board.rows):
+            for c in range(self.board.cols):
+                disc = Disc(self.canvas, r, c)
+                disc.draw(self.board.get_cell(r, c))
 
     def update_board(self, msg):
         parts = msg.strip().split()
@@ -206,7 +212,7 @@ class GUI:
             player = int(parts[1])  
             row = int(parts[2])     
             col = int(parts[3])     
-            self.board[row][col] = player
+            self.board.update(row,col,player)
 
     def update_board_graphic(self, row, col, player):
         if self.circles[row][col] is None:
@@ -229,8 +235,6 @@ class GUI:
         self.reset_board()
         if getattr(self, 'canvas', None) is not None:
             self.draw_graphic_board()
-
-
 
     def enable_buttons(self):
         if hasattr(self, 'canvas') and self.canvas.winfo_exists():
@@ -402,7 +406,7 @@ class GUI:
         self.root.mainloop()
 
     def reset_board(self):
-        self.board = [[0 for _ in range(7)] for _ in range(6)]
+        self.board.reset()
 
     def update_match_card_started(self, msg):
         parts = msg.strip().split()
@@ -605,128 +609,3 @@ class GUI:
             
         return "ArcadeClassic"
 
-    def draw_disc(self,r,c):
-        center_x = c * cfg.CELL_WIDTH + (cfg.CELL_WIDTH / 2)
-        center_y = r * cfg.CELL_HEIGHT + (cfg.CELL_HEIGHT / 2)
-        x1 = center_x - (cfg.DIAMETER / 2)
-        y1 = center_y - (cfg.DIAMETER / 2)
-        x2 = center_x + (cfg.DIAMETER / 2)
-        y2 = center_y + (cfg.DIAMETER / 2)
-        self.circles[r][c] = (x1, y1, x2, y2)
-        cell_value = self.board[r][c]
-        if cell_value == 1:
-            fill_color = cfg.COLOR_TEXT_PINK
-            outline_color = cfg.COLOR_TEXT_PINK
-        elif cell_value == 2:
-            fill_color = cfg.COLOR_TEXT_NEON
-            outline_color = cfg.COLOR_TEXT_NEON
-        else:
-            fill_color = cfg.COLOR_CIRCLE_EMPTY
-            outline_color = cfg.COLOR_CABINET
-            
-        self.canvas.create_oval(
-            x1, y1, x2, y2, 
-            fill=fill_color, 
-            outline=outline_color, 
-            width=4)
-        
-        if cell_value == 1:
-            base_color = cfg.COLOR_TEXT_PINK
-            dark_color = getattr(cfg, 'COLOR_P1_DARK', "#990033")
-            light_color = "#ff80aa" 
-            self.canvas.create_oval(
-                x1 + 4, y1 + 4, x2 + 2, y2 + 2, 
-                fill="#05050d", outline=""
-            )
-            self.canvas.create_oval(
-                x1, y1, x2, y2, 
-                fill=dark_color, outline=dark_color
-            )
-            self.canvas.create_oval(
-                x1 + 3, y1 + 3, x2 - 3, y2 - 3, 
-                fill=base_color, outline=""
-            )
-            r_val_1 = cfg.DIAMETER * 0.12
-            self.canvas.create_oval(
-                x1 + r_val_1, y1 + r_val_1, x2 - r_val_1, y2 - r_val_1, 
-                fill=dark_color, outline=""
-            )
-            r_val_2 = cfg.DIAMETER * 0.20
-            self.canvas.create_oval(
-                x1 + r_val_2, y1 + r_val_2, x2 - r_val_2, y2 - r_val_2, 
-                fill=base_color, outline=""
-            )
-            hl1_w = cfg.DIAMETER * 0.26
-            hl1_h = cfg.DIAMETER * 0.16
-            hx1 = center_x - (cfg.DIAMETER * 0.22) - (hl1_w / 2)
-            hy1 = center_y - (cfg.DIAMETER * 0.24) - (hl1_h / 2)
-            hx2 = hx1 + hl1_w
-            hy2 = hy1 + hl1_h
-            self.canvas.create_oval(
-                hx1, hy1, hx2, hy2, 
-                fill=cfg.COLOR_TEXT_WHITE, outline=""
-            )
-            hl2_size = cfg.DIAMETER * 0.10
-            bx1 = center_x + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
-            by1 = center_y + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
-            bx2 = bx1 + hl2_size
-            by2 = by1 + hl2_size
-            self.canvas.create_oval(
-                bx1, by1, bx2, by2, 
-                fill=light_color, outline=""
-            )
-            
-        elif cell_value == 2:
-            base_color = cfg.COLOR_TEXT_NEON
-            dark_color = getattr(cfg, 'COLOR_P2_DARK', "#006699")
-            light_color = "#80ffff" 
-            self.canvas.create_oval(
-                x1 + 4, y1 + 4, x2 + 2, y2 + 2, 
-                fill="#05050d", outline=""
-            )
-            self.canvas.create_oval(
-                x1, y1, x2, y2, 
-                fill=dark_color, outline=dark_color
-            )
-            self.canvas.create_oval(
-                x1 + 3, y1 + 3, x2 - 3, y2 - 3, 
-                fill=base_color, outline=""
-            )
-            r_val_1 = cfg.DIAMETER * 0.12
-            self.canvas.create_oval(
-                x1 + r_val_1, y1 + r_val_1, x2 - r_val_1, y2 - r_val_1, 
-                fill=dark_color, outline=""
-            )
-            r_val_2 = cfg.DIAMETER * 0.20
-            self.canvas.create_oval(
-                x1 + r_val_2, y1 + r_val_2, x2 - r_val_2, y2 - r_val_2, 
-                fill=base_color, outline=""
-            )
-            hl1_w = cfg.DIAMETER * 0.26
-            hl1_h = cfg.DIAMETER * 0.16
-            hx1 = center_x - (cfg.DIAMETER * 0.22) - (hl1_w / 2)
-            hy1 = center_y - (cfg.DIAMETER * 0.24) - (hl1_h / 2)
-            hx2 = hx1 + hl1_w
-            hy2 = hy1 + hl1_h
-            self.canvas.create_oval(
-                hx1, hy1, hx2, hy2, 
-                fill=cfg.COLOR_TEXT_WHITE, outline=""
-            )
-            hl2_size = cfg.DIAMETER * 0.10
-            bx1 = center_x + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
-            by1 = center_y + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
-            bx2 = bx1 + hl2_size
-            by2 = by1 + hl2_size
-            self.canvas.create_oval(
-                bx1, by1, bx2, by2, 
-                fill=light_color, outline=""
-            ) 
-        else:
-            fill_color = cfg.COLOR_CIRCLE_EMPTY
-            outline_color = cfg.COLOR_CABINET
-            self.canvas.create_oval(
-                x1, y1, x2, y2, 
-                fill=fill_color, 
-                outline=outline_color, 
-                width=4
-            )

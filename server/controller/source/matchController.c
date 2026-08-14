@@ -140,7 +140,8 @@ void end_match(Match * match, int result){
     match->state = status_terminated;
 
     snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", match->id_match);
-    broadcast(msg);   
+    broadcast(msg);  
+    printf("MSG: %s\n", msg); 
 }
 
 void reset_match(int match_id) {
