@@ -3,7 +3,9 @@ import threading
 from UI.GUI import GUI
 
 def main():
-    network = NetworkClient(host="127.0.0.1", port=8080) 
+    network = NetworkClient(
+    host="naxko-93-56-156-229.run.pinggy-free.link", 
+    port=39173)
     if not network.connect():
         print("Connessione Fallita")
         return

@@ -116,12 +116,6 @@ class GUI:
         self.status_label.config(text=cfg.MSG_CREATING, fg=cfg.COLOR_TEXT_NEON)
         self.network.create_match() 
 
-    def on_join_card_click(self, match_id):
-            self.reset_logic_board()
-            self.my_game = False
-            self.current_match_id = match_id
-            self.status_label.config(text=cfg.MSG_JOINING.format(match_id=match_id), fg=cfg.COLOR_TEXT_PINK)
-            self.network.join_match(str(match_id))
 
     def make_move(self, col):
         print(f"MOVE {col}")
@@ -265,8 +259,8 @@ class GUI:
                     self.status_label.config(text=cfg.MSG_WAITING_OPPONENT.format(match_id=m_id), fg=cfg.COLOR_TEXT_NEON)
                 else:
                     self.status_label.config(text=cfg.MSG_NEW_ROOM_AVAILABLE.format(match_id=m_id), fg=cfg.COLOR_TEXT_PINK)
-                    if self.lobby_frame:
-                        self.draw_match_card(m_id, "AVAILABLE")
+                if self.lobby_frame:
+                    self.draw_match_card(m_id, "AVAILABLE")
             
         elif "IS STARING" in msg or "IS STARTING" in msg:
             match_id_list = re.findall(r'\d+', msg)
@@ -335,7 +329,6 @@ class GUI:
                 self.network.reject() 
                 self.pending_join_request = False
                 self.status_label.config(text=cfg.MSG_REJECTED, fg=cfg.COLOR_TEXT_PINK)
-
         elif msg in ["WIN", "LOSE", "DRAW", "OPPONENT_DISCONNECTED"]:
             self.game_on = False
             self.last_game = msg
@@ -399,7 +392,11 @@ class GUI:
     def reset_board(self):
         self.board = [[0 for _ in range(7)] for _ in range(6)]
 
-    def update_match_card_started(self, match_id):
+    def update_match_card_started(self, msg):
+        parts = msg.strip().split()
+        if len(parts) < 2:
+            return
+        match_id = parts[1]
         if match_id not in self.match_cards:
             return
         card_data = self.match_cards[match_id]
@@ -501,17 +498,27 @@ class GUI:
             match_id_str = parts[1]
             match_id_int = int(match_id_str)
             is_busy = "BUSY" in msg
+
             if hasattr(self, 'match_cards'):
                 card = self.match_cards.get(match_id_int) or self.match_cards.get(match_id_str)
                 if card:
+
+                    frame = card.get("frame")
+                    if frame and not frame.winfo_exists():
+                        self.match_cards.pop(match_id_int, None)
+                        self.match_cards.pop(match_id_str, None)
+                        return
+
                     btn = card.get("btn_join")      
-                    lbl = card.get("lbl_status")    
+                    lbl = card.get("lbl_status")  
                     if is_busy:
+            
                         if btn:
                             btn.config(state="disabled", text="BUSY")
                         if lbl:
                             lbl.config(text="Occupata...", fg=cfg.COLOR_TEXT_PINK)
                     else:
+                        
                         if btn:
                             btn.config(state="normal", text="JOIN")
                         if lbl:

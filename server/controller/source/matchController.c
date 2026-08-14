@@ -31,47 +31,17 @@ Match* get_match(int client_fd) {
     return NULL;
 }
 
-int get_opponent(int current_client_fd) {
+int get_opponent(int client_socket) {
     int opp_fd = -1;
 
     pthread_mutex_lock(&mutex_match);
-
-    for (int i = 0; i < MAX_MATCHES; i++) {
-        if (matches[i].state == status_game_on) {
-            if (matches[i].fd_giocatore1 == current_client_fd) {
-                opp_fd = matches[i].fd_giocatore2;
-                break;
-            } else if (matches[i].fd_giocatore2 == current_client_fd) {
-                opp_fd = matches[i].fd_giocatore1;
-                break;
-            }
-        }
-    }
-
+    Match * match = get_match(client_socket);
+    if(match != NULL)
+        opp_fd = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
     pthread_mutex_unlock(&mutex_match);
     return opp_fd;
 }
 
-int get_opponent_fd(int id_match, int current_client_fd) {
-    int opp_fd = -1;
-
-    pthread_mutex_lock(&mutex_match); 
-
-    for (int i = 0; i < MAX_MATCHES; i++) 
-        if (matches[i].id_match == id_match && matches[i].state == status_game_on) {
-            if (matches[i].fd_giocatore1 == current_client_fd)
-                opp_fd = matches[i].fd_giocatore2;
-            else if (matches[i].fd_giocatore2 == current_client_fd) 
-                opp_fd = matches[i].fd_giocatore1;
-            
-            break;
-        }
-    
-
-    pthread_mutex_unlock(&mutex_match); 
-
-    return opp_fd;
-}
 
 Match * get_match_by_Id(int id_match){
     int i = 0;
@@ -193,14 +163,52 @@ void reset_match(int match_id) {
     pthread_mutex_unlock(&mutex_match);
 }
 
-int play_turn(int match_id, int col){
+
+int request_to_creator(int id_match, int client_req) {  
+    pthread_mutex_lock(&mutex_match);
+    Match *match = get_match_by_Id(id_match);
+    if (match == NULL || match->state != status_waiting) {
+        pthread_mutex_unlock(&mutex_match);
+        return 0; 
+    }
+    
+    match->join_status = 0;
+    match->fd_giocatore2 = client_req;
+    char msg[64];
+    
+    snprintf(msg, sizeof(msg), "JOIN_REQUEST %d", client_req);
+    send_msg(match->fd_giocatore1, msg);
+    snprintf(msg, sizeof(msg), "ROOM %d IS BUSY", id_match);
+    
+    broadcast_except(msg, client_req);
+
+    while (match->join_status == 0)
+        pthread_cond_wait(&match->cond_join, &mutex_match); 
+    int final_status = match->join_status;
+    pthread_mutex_unlock(&mutex_match);
+
+    if (final_status == 1) 
+        return 1; 
+    else if (final_status == 3) {
+        send_msg(client_req, "JOIN_REJECTED Creator Disconnected");
+        char msg[64];
+        snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", match->id_match);
+        broadcast(msg);
+
+        reset_match(id_match);
+        return 0;
+    } else {
+        send_msg(client_req, "JOIN_REJECTED");
+        return 0;
+    }
+}
+
+
+int play_turn(Match * match, int col){
     pthread_mutex_lock(&mutex_match);
     int i = 0;
     int inserted_row = -1;
-    while((i < MAX_MATCHES) && (matches[i].id_match != match_id)) i++;
-    if(i >= MAX_MATCHES)
-        printf("MATCH %d DOES NOT EXISTS\n", match_id);
-    else{
+    if(match != NULL){
         inserted_row = insertDisc(&matches[i], col, matches[i].turn + 1);
         if(matches[i].turn == 0)
             matches[i].turn = 1;
@@ -213,50 +221,42 @@ int play_turn(int match_id, int col){
 
 void handle_client_disconnect(int client_socket) {
     pthread_mutex_lock(&mutex_match);
-    Match * match = get_match(client_socket);
+    Match *match = get_match(client_socket);
+    
     if (match != NULL) {
-       int opp = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
-       if (match->state == status_game_on) {
-           if (opp != -1) 
-           send_msg(opp, "OPPONENT_DISCONNECTED");
-           char msg[64];
-           snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", match->id_match);
-           broadcast(msg);
+        int opp = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
+        if (match->state == status_game_on || match->state == status_terminated) {
+            if (opp != -1) 
+                send_msg(opp, "OPPONENT_DISCONNECTED");
+            char msg[64];
+            snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", match->id_match);
+            broadcast(msg);
+            
+            pthread_mutex_unlock(&mutex_match);
+            reset_match(match->id_match); 
         } 
+        else if (match->state == status_waiting) {
+            if (client_socket == match->fd_giocatore1) {
+                if (match->fd_giocatore2 != -1 && match->join_status == 0) {
+                    match->join_status = 3;
+                    pthread_cond_signal(&match->cond_join);
+                    pthread_mutex_unlock(&mutex_match);
+                } else {
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", match->id_match);
+                    broadcast(msg);
+                    pthread_mutex_unlock(&mutex_match);
+                    reset_match(match->id_match);
+                }
+            } else {
+                match->fd_giocatore2 = -1;
+                pthread_mutex_unlock(&mutex_match);
+            }
+        } else 
+            pthread_mutex_unlock(&mutex_match);
+        
+    } else 
         pthread_mutex_unlock(&mutex_match);
-        reset_match(match->id_match);
-    }else
-        pthread_mutex_unlock(&mutex_match);
-}
-
-int request_to_creator(int id_match, int client_req) {
-    pthread_mutex_lock(&mutex_match);
-    Match *match = get_match_by_Id(id_match);
-    if (match == NULL || match->state != status_waiting) {
-        pthread_mutex_unlock(&mutex_match);
-        return 0; 
-    }
-    match->join_status = 0;
-    match->fd_giocatore2 = client_req;
-    
-    char msg[64];
-    snprintf(msg, sizeof(msg), "JOIN_REQUEST %d", client_req);
-    send_msg(match->fd_giocatore1, msg);
-    snprintf(msg, sizeof(msg), "ROOM %d IS BUSY", id_match);
-    broadcast_except(msg, client_req);
-    
-    while (match->join_status == 0) 
-        pthread_cond_wait(&match->cond_join, &mutex_match); 
-    
-    int result = (match->join_status == 1) ? 1 : 0;
-    
-    if (result == 0) {
-        match->fd_giocatore2 = -1;
-        snprintf(msg, sizeof(msg), "ROOM %d IS AVAILABLE", id_match);
-        broadcast(msg);
-    }
-    pthread_mutex_unlock(&mutex_match);
-    return result;
 }
 
 int handle_msg(int client_socket, char *buffer) {
@@ -291,8 +291,25 @@ int handle_msg(int client_socket, char *buffer) {
 
 void handle_join(int client_socket, int id_match) {
     if (request_to_creator(id_match, client_socket)) {
+
+         if (send_msg(client_socket, "WAIT TURN") < 0) {
+            printf("Client B disconnected before finalizing the join\n");
+            int fd_creator = get_opponent(client_socket);
+            if (fd_creator != -1) {
+                send_msg(fd_creator, "OPPONENT_DISCONNECTED");
+            }
+            pthread_mutex_lock(&mutex_match);
+            Match *match = get_match_by_Id(id_match);
+            if (match != NULL) {
+                match->fd_giocatore2 = -1;
+                match->join_status = -1;
+                match->state = status_waiting; 
+            }
+            pthread_mutex_unlock(&mutex_match);
+            return;
+        }
         if (join_match_request(id_match, client_socket)) {
-            int fd_creator = get_opponent_fd(id_match, client_socket);
+            int fd_creator = get_opponent(client_socket);
             if (fd_creator != -1) {
                 send_msg(fd_creator, "YOUR TURN");   
                 send_msg(client_socket, "WAIT TURN");
@@ -302,12 +319,21 @@ void handle_join(int client_socket, int id_match) {
             }
         }else 
             send_msg(client_socket, "ERROR IMPOSSIBLE TO JOIN THE MATCH\n");
-    }else 
+    }else{
+        char msg[64];
+        snprintf(msg, sizeof(msg), "ROOM %d IS AVAILABLE", id_match);
+        broadcast(msg);
         send_msg(client_socket, "JOIN REJECTED\n");
+    }
 }
 
 void handle_create(int client_socket) {
     printf("HANDLING CREATE\n");
+    for(int i = 0; i < MAX_MATCHES; i++){
+        if(matches[i].id_match != -1){
+            printf("MATCH %d \n", matches[i].id_match);
+        }
+    }
     int match_id = create_match(client_socket);
     if(match_id != -1){
         char msg[64];
@@ -321,27 +347,29 @@ void handle_create(int client_socket) {
 
 void handle_move(int client_socket, int col){
     Match * match = get_match(client_socket);
-    int id_opp = get_opponent(client_socket); 
-    if (id_opp != -1 && match != NULL && match->state == status_game_on){
+    if (match != NULL && match->state == status_game_on){
+        int opp = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
         fflush(stdout);
-        int row = play_turn(match->id_match, col);
-        pthread_mutex_lock(&mutex_match);
-        int player_num = (match->fd_giocatore1 == client_socket) ? 1 : 2;
-        char msg[64];
-        snprintf(msg, sizeof(msg), "UPDATE_BOARD %d %d %d", player_num, row, col);
-        send_msg(client_socket, msg);
-        send_msg(id_opp, msg);
-        usleep(1000);
-        
-        if (check_win(match, col)) 
-            end_match(match, (client_socket == match->fd_giocatore1) ? WINNER_P1 : WINNER_P2);
-        else if (check_draw(match)) 
-            end_match(match, DRAW);
-        else {
-            send_msg(client_socket, "WAIT TURN");
-            send_msg(id_opp, "YOUR TURN");
+        if(opp != -1){
+            int row = play_turn(match, col);
+            pthread_mutex_lock(&mutex_match);
+            int player_num = (match->fd_giocatore1 == client_socket) ? 1 : 2;
+            char msg[64];
+            snprintf(msg, sizeof(msg), "UPDATE_BOARD %d %d %d", player_num, row, col);
+            send_msg(client_socket, msg);
+            send_msg(opp, msg);
+            usleep(1000);
+            if (check_win(match, col)) 
+                end_match(match, (client_socket == match->fd_giocatore1) ? WINNER_P1 : WINNER_P2);
+            else if (check_draw(match)) 
+                end_match(match, DRAW);
+            else {
+                send_msg(client_socket, "WAIT TURN");
+                send_msg(opp, "YOUR TURN");
+            }
+            pthread_mutex_unlock(&mutex_match);
         }
-        pthread_mutex_unlock(&mutex_match);
+        
     } else
         printf("ILLEGAL MOVE\n"); 
 }
@@ -410,10 +438,9 @@ void handle_rematch_accept(int client_socket){
     pthread_mutex_lock(&mutex_match);
     Match * match = get_match(client_socket);
     if (match != NULL) {
-        printf("HERE 1");
         if (match->state == status_terminated) {
-            printf("HERE 2");
             int opp = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
+
             if (client_socket == match->fd_giocatore1)
                 match->p1_rematch = 1;
             else
@@ -423,10 +450,8 @@ void handle_rematch_accept(int client_socket){
                 restart_match(match);
             else if (opp != -1) 
                 send_msg(opp, "OPPONENT_WANTS_REMATCH"); 
-            printf("HERE 3");
         }
     }
-    printf("HERE 4");
     pthread_mutex_unlock(&mutex_match);
 }
 
@@ -461,4 +486,25 @@ void restart_match(Match * match){
     
     send_msg(match->fd_giocatore1, "YOUR TURN");
     send_msg(match->fd_giocatore2, "WAIT TURN");
+}
+
+
+void send_all_matches_to_client(int client_socket) {
+    pthread_mutex_lock(&mutex_match);
+    
+    for (int i = 0; i < MAX_MATCHES; i++) {
+        if (matches[i].id_match != -1) {
+            char msg;
+            const char *state_str = "WAITING";
+            if (matches[i].state == status_game_on) 
+                state_str = "BUSY";
+            else if (matches[i].state == status_terminated) 
+                state_str = "AVAILABLE";
+            
+            snprintf(msg, sizeof(msg), "ROOM %d %s", matches[i].id_match, state_str);
+            send_msg(client_socket, msg);
+        }
+    }
+    
+    pthread_mutex_unlock(&mutex_match);
 }

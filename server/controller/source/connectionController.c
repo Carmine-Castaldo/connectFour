@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -15,6 +16,7 @@ int next_client = 0;
 pthread_mutex_t mutex_clients = PTHREAD_MUTEX_INITIALIZER;
 
 int init_server(int port){
+    signal(SIGPIPE, SIG_IGN);
     for(int i = 0; i < MAX_CLIENT; i++)
         clients[i] = -1;
     
@@ -58,6 +60,8 @@ void *handle_client(void *client_server_socket) {
     int client_socket = *(int*)client_server_socket;
     free(client_server_socket);
     char buffer[1024];
+
+    
     
     while (1) {
         memset(buffer, 0, sizeof(buffer));
@@ -66,7 +70,6 @@ void *handle_client(void *client_server_socket) {
     
         if (letti <= 0) {
             printf("HANDLE DISCONNECTION OF %d\n", client_socket);
-            handle_client_disconnect(client_socket);
             break; 
         }
 
@@ -77,6 +80,15 @@ void *handle_client(void *client_server_socket) {
             break;
         
     }
+    pthread_mutex_lock(&mutex_clients);
+    for (int i = 0; i < MAX_CLIENT; i++) {
+        if (clients[i] == client_socket) {
+            clients[i] = -1;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&mutex_clients);
+    handle_client_disconnect(client_socket);
     close(client_socket); 
     pthread_exit(NULL);   
 }

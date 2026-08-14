@@ -7,8 +7,8 @@ int init_matchController();
 void init_match(Match * match, int id_match, int fd_creator);
 int create_match(int fd_creator);
 int join_match_request(int match_id, int fd_applicant);
-
-int play_turn(int match_id, int column);
+int request_to_creator(int id_match, int client_socket);
+int play_turn(Match * match, int column);
 void end_match(Match * match_id, int result);
 void reset_match(int match_id);
 void restart_match(Match * match);
