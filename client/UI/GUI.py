@@ -1,11 +1,12 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk
 import queue
 import re
 import os, platform
 from UI.components import config as cfg 
 from UI.components.board import Board
 from UI.components.disc import Disc
+from UI.components.popup import Popup
 
 
 class GUI:
@@ -17,6 +18,7 @@ class GUI:
             while not self.network.safe_queue.empty():
                 msg = self.network.safe_queue.get()
                 self.enqueue_message(msg)
+                
         self.game_on = False
         self.my_turn = False
         self.my_game = False
@@ -24,18 +26,52 @@ class GUI:
         self.rematch_cancelled = False
         self.challenger_fd = "UNKNOWN"
         self.pending_join_request = False
+        
         self.root = tk.Tk()
         self.root.title(cfg.WINDOW_TITLE)
         self.root.geometry(cfg.WINDOW_GEOMETRY)
         self.root.configure(bg=cfg.COLOR_BG)
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        self.root.overrideredirect(True)
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        
+        self.main_container = tk.Frame(
+            self.root, 
+            bg=cfg.COLOR_BG, 
+            highlightbackground=cfg.COLOR_TEXT_NEON,
+            highlightcolor=cfg.COLOR_TEXT_NEON, 
+            highlightthickness=5,
+            bd=0
+        )
+
+        self.main_container.grid(row=0, column=0, sticky="nsew")
+        self.root.bind("<Button-1>", self.start_move)
+        self.root.bind("<B1-Motion>", self.do_move)
+
         self.circles = [[None for _ in range(7)] for _ in range(6)] 
         self.lobby_frame = None
         self.known_matches = {}
         self.current_match_id = None
         self.game_frame = None
         self.board = Board()
+
+        self.style = ttk.Style()
+        self.style.theme_use('default')
+        self.style.configure(
+            "Custom.Vertical.TScrollbar",
+            background=cfg.COLOR_BG,        
+            troughcolor=cfg.COLOR_BG,       
+            bordercolor=cfg.COLOR_BG,       
+            arrowcolor=cfg.COLOR_TEXT_NEON 
+        )
+        self.style.map(
+            "Custom.Vertical.TScrollbar",
+            background=[('active', cfg.COLOR_TEXT_PINK)]
+        )
+        
         self.load_arcade_font()
         self.show_lobby_screen()
         
@@ -69,33 +105,38 @@ class GUI:
             self.lobby_frame.destroy()
             self.lobby_frame = None
             
-        self.lobby_frame = tk.Frame(self.root, bg=cfg.COLOR_BG)
-        self.lobby_frame.pack(expand=True, fill="both", padx=20, pady=20)
+        self.lobby_frame = tk.Frame(self.main_container, bg=cfg.COLOR_BG)
+        self.lobby_frame.grid(row=0, column=0, sticky="nsew", padx=30, pady=20)
+        
+        self.main_container.rowconfigure(0, weight=1)
+        self.main_container.columnconfigure(0, weight=1)
         
         title_label = tk.Label(self.lobby_frame, text=cfg.TXT_TITLE, font=cfg.FONT_TITLE, fg=cfg.COLOR_TEXT_PINK, bg=cfg.COLOR_BG)
-        title_label.pack(pady=20)
+        title_label.pack(pady=(10, 15))
         
-        btn_create = tk.Button(self.lobby_frame, text=cfg.TXT_CREATE_BTN, font=cfg.FONT_BTN_LARGE, 
-                               bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_NEON, activebackground=cfg.COLOR_BTN_ACTIVE,
-                               activeforeground=cfg.COLOR_BG, bd=2, relief="flat", highlightbackground=cfg.COLOR_BTN_BORDER,
-                               command=self.on_create_click)
-        btn_create.pack(pady=10)
+        self.rooms_outer = tk.LabelFrame(self.lobby_frame, text="  ACTIVE LOBBIES  ", font=cfg.FONT_LABEL_MEDIUM, 
+                                         fg=cfg.COLOR_TEXT_NEON, bg=cfg.COLOR_BG, bd=0, relief="flat")
+        self.rooms_outer.pack(fill="both", expand=True, padx=5, pady=10)
         
-        self.rooms_outer = tk.LabelFrame(self.lobby_frame, text="ACTIVE LOBBIES", font=cfg.FONT_LABEL_MEDIUM, 
-                                         fg=cfg.COLOR_TEXT_NEON, bg=cfg.COLOR_BG, bd=2, relief="groove")
-        self.rooms_outer.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        self.lobby_canvas = tk.Canvas(self.rooms_outer, bg=cfg.COLOR_BG, highlightthickness=0)
-        self.lobby_scrollbar = tk.Scrollbar(self.rooms_outer, orient="vertical", command=self.lobby_canvas.yview)
-        
-        self.rooms_container = tk.Frame(self.lobby_canvas, bg=cfg.COLOR_BG)
-        
-
-        self.rooms_container.bind(
-            "<Configure>",
-            lambda e: self.lobby_canvas.configure(scrollregion=(0, 0, e.width, e.height))
+        self.rooms_outer.columnconfigure(0, weight=1)
+        self.rooms_outer.columnconfigure(1, weight=0)
+        self.rooms_outer.rowconfigure(0, weight=1)
+        self.lobby_canvas = tk.Canvas(self.rooms_outer, bg=cfg.COLOR_BG, highlightthickness=0, height=500)        
+        self.lobby_scrollbar = ttk.Scrollbar(
+            self.rooms_outer, 
+            orient="vertical", 
+            command=self.lobby_canvas.yview, 
+            style="Custom.Vertical.TScrollbar"
         )
         
+        self.lobby_canvas.grid(row=0, column=0, sticky="nsew")
+        self.lobby_scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        self.rooms_container = tk.Frame(self.lobby_canvas, bg=cfg.COLOR_BG)
+        self.rooms_container.bind(
+            "<Configure>",
+            lambda e: self.lobby_canvas.configure(scrollregion=self.lobby_canvas.bbox("all"))
+        )
         self.canvas_window = self.lobby_canvas.create_window((0, 0), window=self.rooms_container, anchor="nw")
         
         self.lobby_canvas.bind(
@@ -104,16 +145,26 @@ class GUI:
         )
         
         self.lobby_canvas.configure(yscrollcommand=self.lobby_scrollbar.set)
-        
-        self.lobby_canvas.pack(side="left", fill="both", expand=True)
-        self.lobby_scrollbar.pack(side="right", fill="y")
-        
         self.match_cards = {}
         for m_id, status in reversed(list(self.known_matches.items())):
             self.draw_match_card(m_id, status)
-        
+            
         self.status_label = tk.Label(self.lobby_frame, text=cfg.TXT_LOBBY_STATUS_DEFAULT, font=cfg.FONT_LABEL_SMALL, fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
-        self.status_label.pack(pady=15)
+        self.status_label.pack(pady=10)
+        btn_container = tk.Frame(self.lobby_frame, bg=cfg.COLOR_BG)
+        btn_container.pack(pady=(5, 15))
+        
+        btn_create = tk.Button(btn_container, text=cfg.TXT_CREATE_BTN, font=cfg.FONT_BTN_LARGE, 
+                               bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_NEON, activebackground=cfg.COLOR_BTN_ACTIVE,
+                               activeforeground=cfg.COLOR_BG, bd=2, relief="flat", highlightbackground=cfg.COLOR_BTN_BORDER,
+                               command=self.on_create_click)
+        btn_create.pack(side="left", padx=20, ipadx=15, ipady=5)
+        
+        btn_exit = tk.Button(btn_container, text="EXIT", font=cfg.FONT_BTN_LARGE, 
+                             bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_PINK, activebackground=cfg.COLOR_TEXT_PINK,
+                             activeforeground=cfg.COLOR_BG, bd=2, relief="flat", highlightbackground=cfg.COLOR_TEXT_PINK,
+                             command=self.on_closing)
+        btn_exit.pack(side="left", padx=20, ipadx=25, ipady=5)
 
     def on_create_click(self):
         self.reset_board()
@@ -140,66 +191,46 @@ class GUI:
         self.show_lobby_screen()
 
     def show_game_screen(self):
-        if self.game_frame:
-            self.game_frame.destroy()
-            self.game_frame = None
         if self.lobby_frame:
             self.lobby_frame.destroy()
             self.lobby_frame = None
+        if self.game_frame:
+            self.game_frame.destroy()
+            self.game_frame = None
             
-        self.game_frame = tk.Frame(self.root, bg=cfg.COLOR_BG)
-        self.game_frame.pack(expand=True, fill="both")
+        self.game_frame = tk.Frame(self.main_container, bg=cfg.COLOR_BG)
+        self.game_frame.grid(row=0, column=0, sticky="nsew")
         
-        self.turn_label = tk.Label(
-            self.game_frame, 
-            text="READY...", 
-            font=cfg.FONT_LABEL_LARGE, 
-            fg=cfg.COLOR_TEXT_WHITE, 
-            bg=cfg.COLOR_BG
-        )
-        self.turn_label.pack(pady=20)
+        self.main_container.rowconfigure(0, weight=1)
+        self.main_container.columnconfigure(0, weight=1)
         
-        self.canvas = tk.Canvas(
-            self.game_frame, 
-            width=980, 
-            height=810, 
-            bg=cfg.COLOR_BG_BOARD, 
-            highlightthickness=6, 
-            highlightbackground=cfg.COLOR_CABINET
-        )
+        self.turn_label = tk.Label(self.game_frame, text="PARTITA IN CORSO", font=cfg.FONT_LABEL_MEDIUM, fg=cfg.COLOR_TEXT_NEON, bg=cfg.COLOR_BG)
+        self.turn_label.pack(pady=10)
+        
+        self.canvas = tk.Canvas(self.game_frame, width=980, height=840, bg=cfg.COLOR_BG_BOARD, highlightthickness=0)
         self.canvas.pack(pady=10)
-
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<Motion>", self.on_canvas_hover)
-        self.canvas.bind("<Leave>", self.on_canvas_leave)
-
-        btn_quit = tk.Button(
+        self.draw_graphic_board()
+        
+        btn_abandon = tk.Button(
             self.game_frame, 
-            text=cfg.TXT_QUIT_BTN, 
-            font=cfg.FONT_BTN_SMALL, 
+            text="ABANDON MATCH", 
+            font=cfg.FONT_BTN_LARGE, 
             bg=cfg.COLOR_BG, 
             fg=cfg.COLOR_TEXT_PINK, 
             activebackground=cfg.COLOR_TEXT_PINK,
             activeforeground=cfg.COLOR_BG, 
-            bd=2, 
+            bd=20, 
             relief="flat", 
             highlightbackground=cfg.COLOR_TEXT_PINK,
-            command=self.on_quit_match
+            command=self.on_abandon_click 
         )
-        btn_quit.pack(pady=20)
-        
-        self.draw_graphic_board()
-        
-        if self.my_turn:
-            self.turn_label.config(text=cfg.MSG_YOUR_TURN, fg=cfg.COLOR_TEXT_NEON)
-            self.enable_buttons()
-        else:
-            self.turn_label.config(text=cfg.MSG_WAIT_TURN, fg=cfg.COLOR_TEXT_PINK)
-            self.disable_buttons()
+        btn_abandon.pack(pady=(15, 20), ipadx=15, ipady=3)
 
     def draw_graphic_board(self):
-        if not hasattr(self, 'canvas') or self.canvas is None:
-            return
+        if not hasattr(self, 'canvas') or self.canvas is None or not self.canvas.winfo_exists():
+                return
         self.canvas.delete("all")
         for r in range(self.board.rows):
             for c in range(self.board.cols):
@@ -320,48 +351,29 @@ class GUI:
             parts = msg.split()
             self.challenger_fd = parts[1] if len(parts) > 1 else "UNKNOWN"
             self.pending_join_request = True
-            accepted = messagebox.askyesno(
+
+            def on_join_response(accepted):
+                self.active_popup = None
+                if accepted:
+                    self.network.accept() 
+                    self.pending_join_request = False
+                else:
+                    self.network.reject() 
+                    self.pending_join_request = False
+                    self.status_label.config(text=cfg.MSG_REJECTED, fg=cfg.COLOR_TEXT_PINK)
+
+            self.active_popup = Popup(
+                self.root, 
                 cfg.POPUP_TITLE_CHALLENGE, 
-                cfg.POPUP_MSG_CHALLENGE.format(fd=self.challenger_fd)
+                cfg.POPUP_MSG_CHALLENGE.format(fd=self.challenger_fd),
+                popup_type="yesno", 
+                callback=on_join_response
             )
-            if accepted:
-                self.network.accept() 
-                self.pending_join_request = False
-            else:
-                self.network.reject() 
-                self.pending_join_request = False
-                self.status_label.config(text=cfg.MSG_REJECTED, fg=cfg.COLOR_TEXT_PINK)
         elif msg in ["WIN", "LOSE", "DRAW", "OPPONENT_DISCONNECTED"]:
             self.game_on = False
             self.last_game = msg
             self.disable_buttons()
-            self.reset_board()
-            
-            if self.current_match_id is not None:
-                self.known_matches[self.current_match_id] = "TERMINATED"
-                
-            if msg == "WIN":
-                message = cfg.POPUP_MSG_WIN
-            elif msg == "LOSE":
-                message = cfg.POPUP_MSG_LOSE
-            elif msg == "DRAW":
-                message = cfg.POPUP_MSG_DRAW
-            else: 
-                message = cfg.POPUP_MSG_DISCONNECTED
-                self.last_game = None
-                self.show_disconnect_win_popup()
-
-            scelta = None
-            if self.last_game is not None:
-                scelta = messagebox.askyesno(cfg.POPUP_TITLE_END, message)
-            if scelta:
-                self.network.send_msg("REMATCH_ACCEPT") 
-                if getattr(self, 'turn_label', None) is not None:
-                    self.turn_label.config(text=cfg.MSG_REMATCH_WAIT, fg=cfg.COLOR_TEXT_WHITE)
-            else:
-                self.network.send_msg("REMATCH_DECLINE")
-                self.current_match_id = None
-                self.show_lobby_screen()
+            self.root.after(200, lambda: self.show_endgame_popup(msg))
 
         elif msg == "OPPONENT_WANTS_REMATCH":
             if getattr(self, 'turn_label', None) is not None:
@@ -380,8 +392,26 @@ class GUI:
             if self.current_match_id is not None:
                 self.known_matches[self.current_match_id] = "TERMINATED"
             self.current_match_id = None
-            messagebox.showinfo(cfg.POPUP_TITLE_REMATCH_CANCEL, cfg.POPUP_MSG_REMATCH_CANCEL)
-            self.show_lobby_screen()
+
+            if getattr(self, 'active_popup', None) is not None:
+                try:
+                    self.active_popup.top.grab_release()
+                    self.active_popup.top.destroy()
+                except Exception:
+                    pass
+                self.active_popup = None
+
+            def on_cancel_ack(_):
+                self.active_popup = None
+                self.show_lobby_screen()
+                
+            self.active_popup = Popup(
+                self.root, 
+                cfg.POPUP_TITLE_REMATCH_CANCEL, 
+                cfg.POPUP_MSG_REMATCH_CANCEL, 
+                popup_type="ok", 
+                callback=on_cancel_ack
+            )
         elif msg.startswith("ROOM"):
             print(f"msg: {msg}\n")
             try:
@@ -430,11 +460,11 @@ class GUI:
 
 
     def draw_match_card(self, match_id, status):
-        card = tk.Frame(self.rooms_container, bg=cfg.COLOR_BG_BOARD, bd=1, relief="solid", highlightbackground=cfg.COLOR_CABINET, highlightthickness=1)
-        card.pack(fill="x", padx=10, pady=5)
+        card = tk.Frame(self.rooms_container, bg=cfg.COLOR_BG_BOARD, bd=1, relief="flat", highlightbackground=cfg.COLOR_CABINET, highlightthickness=1)
+        card.pack(fill="x", padx=15, pady=8)
         
         lbl_id = tk.Label(card, text=f"ROOM #{match_id}", font=cfg.FONT_LABEL_MEDIUM, fg=cfg.COLOR_TEXT_WHITE, bg=cfg.COLOR_BG_BOARD)
-        lbl_id.pack(side="left", padx=10, pady=5)
+        lbl_id.pack(side="left", padx=15, pady=10)
         
         if status == "AVAILABLE":
             status_text = "AVAILABLE"
@@ -450,13 +480,13 @@ class GUI:
             btn_state = "disabled"
             
         lbl_status = tk.Label(card, text=status_text, font=cfg.FONT_LABEL_SMALL, fg=status_color, bg=cfg.COLOR_BG_BOARD)
-        lbl_status.pack(side="left", padx=20, pady=5)
+        lbl_status.pack(side="left", padx=20, pady=10)
         
         btn_join = tk.Button(card, text="JOIN", font=cfg.FONT_BTN_SMALL, bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_NEON, 
                              activebackground=cfg.COLOR_TEXT_NEON, activeforeground=cfg.COLOR_BG, bd=1, relief="flat", 
                              state=btn_state,
                              command=lambda: self.on_join_card_click(match_id))
-        btn_join.pack(side="right", padx=10, pady=5)
+        btn_join.pack(side="right", padx=15, pady=10)
         
         self.match_cards[match_id] = {
             "frame": card,
@@ -464,48 +494,6 @@ class GUI:
             "lbl_status": lbl_status,
             "btn_join": btn_join
         }
-
-    def show_disconnect_win_popup(self):
-            self.disable_buttons()
-        
-            popup = tk.Toplevel(self.root)
-            popup.title("Partita Terminata")
-            popup.geometry("380x220")
-            popup.configure(bg=cfg.COLOR_BG)
-            popup.resizable(False, False)
-        
-            popup.transient(self.root)
-            popup.grab_set()
-            
-            popup.geometry("+{}+{}".format(
-                self.root.winfo_x() + 50,
-                self.root.winfo_y() + 100
-            ))
-
-            lbl_msg = tk.Label(
-                popup, 
-                text="L'avversario ha abbandonato.\nHAI VINTO! ", 
-                font=cfg.FONT_LABEL_MEDIUM, 
-                fg=cfg.COLOR_TEXT_NEON, 
-                bg=cfg.COLOR_BG,
-                justify="center"
-            )
-            lbl_msg.pack(pady=35)
-            
-            btn_ok = tk.Button(
-                popup, 
-                text="OK", 
-                font=cfg.FONT_BTN_LARGE, 
-                bg=cfg.COLOR_BG, 
-                fg=cfg.COLOR_TEXT_PINK, 
-                activebackground=cfg.COLOR_BTN_ACTIVE,
-                activeforeground=cfg.COLOR_BG, 
-                bd=2, 
-                relief="flat", 
-                highlightbackground=cfg.COLOR_BTN_BORDER,
-                command=lambda: [popup.destroy(), self.show_lobby_screen()]
-            )
-            btn_ok.pack(pady=10) 
 
     def update_match_card_busy(self, msg):
         try:
@@ -540,7 +528,7 @@ class GUI:
                         if lbl:
                             lbl.config(text="In attesa", fg=cfg.COLOR_TEXT_NEON)
                 else:
-                    print(f"Card non trovata per match_id {match_id_str}. Chiavi presenti: {list(self.match_cards.keys())}")
+                    print(f"Card non trovata per match_id {match_id_str}. Chiavi: {list(self.match_cards.keys())}")
         except Exception as e:
             print(f"Errore update_match_card_busy: {e}")
 
@@ -548,19 +536,28 @@ class GUI:
     def on_canvas_click(self, event):
         if not self.my_turn:
             return
+      
         col = event.x // 140
         if 0 <= col < 7:
+            if self.board.get_cell(0, col) != 0:
+                return
             self.canvas.delete("hover_highlight")
+            self.my_turn = False
             self.make_move(col)
+        
 
     def on_canvas_hover(self, event):
         if not self.my_turn:
             self.canvas.delete("hover_highlight")
             self.canvas.config(cursor="")
             return
-            
         col = event.x // 140
+    
         if 0 <= col < 7:
+            if self.board.get_cell(0, col) != 0:
+                            self.canvas.delete("hover_highlight")
+                            self.canvas.config(cursor="")
+                            return
             self.canvas.config(cursor="hand2")
             self.canvas.delete("hover_highlight")
             my_color = cfg.COLOR_TEXT_PINK if getattr(self, 'my_game', False) else cfg.COLOR_TEXT_NEON
@@ -609,3 +606,75 @@ class GUI:
             
         return "ArcadeClassic"
 
+
+    def show_endgame_popup(self, msg):
+        if self.current_match_id is not None:
+            self.known_matches[self.current_match_id] = "TERMINATED"
+            
+        if msg == "WIN":
+            message = cfg.POPUP_MSG_WIN
+            p_type = "yesno"
+        elif msg == "LOSE":
+            message = cfg.POPUP_MSG_LOSE
+            p_type = "yesno"
+        elif msg == "DRAW":
+            message = cfg.POPUP_MSG_DRAW
+            p_type = "yesno"
+        else: 
+            message = "WINNER\n\n OPPONENT HAS LEFT THE ROOM.!"
+            p_type = "OK"
+        border_color = "#990033" if self.my_game else "#006699"
+
+        def on_popup_closed(scelta_utente):
+            self.active_popup = None
+            self.reset_board()
+            if getattr(self, 'canvas', None) is not None:
+                self.draw_graphic_board()
+                
+            if p_type == "OK":
+                self.current_match_id = None
+                self.show_lobby_screen()
+                return
+                
+            if scelta_utente:
+                self.network.send_msg("REMATCH_ACCEPT") 
+                if getattr(self, 'turn_label', None) is not None:
+                    self.turn_label.config(text=cfg.MSG_REMATCH_WAIT, fg=cfg.COLOR_TEXT_WHITE)
+            else:
+                self.network.send_msg("REMATCH_DECLINE")
+                self.current_match_id = None
+                self.show_lobby_screen()
+
+        
+        self.active_popup = Popup(self.root, cfg.POPUP_TITLE_END, message, popup_type=p_type, callback=on_popup_closed, color=border_color)
+
+
+
+    def start_move(self, event):
+        widget_class = event.widget.winfo_class()
+        if widget_class in ('Button', 'Scrollbar', 'TScrollbar', 'Canvas'):
+            if hasattr(self, '_x'):
+                delattr(self, '_x')
+            if hasattr(self, '_y'):
+                delattr(self, '_y')
+            return
+            
+        self._x = event.x
+        self._y = event.y
+
+    def do_move(self, event):
+        if not hasattr(self, '_x') or not hasattr(self, '_y'):
+            return
+            
+        x = event.x_root - self._x
+        y = event.y_root - self._y
+        self.root.geometry(f"+{x}+{y}")
+
+    def on_abandon_click(self):
+        if self.network:
+            self.network.send_msg("QUIT_MATCH")
+            
+        self.current_match_id = None
+        self.my_game = False
+        self.reset_board()
+        self.show_lobby_screen()

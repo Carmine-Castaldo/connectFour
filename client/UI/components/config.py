@@ -48,16 +48,16 @@ MSG_REMATCH_ACCEPTED = "REMATCH ACCEPTED!"
 MSG_OPPONENT_ASK_REMATCH = "OPPONENT REQUESTS REMATCH!"
 
 POPUP_TITLE_END = "Game Over"
-POPUP_MSG_WIN = "CONGRATULATIONS, YOU WIN!\n\nWant a rematch?"
-POPUP_MSG_LOSE = "YOU LOSE! Better luck next time.\n\nWant a rematch?"
-POPUP_MSG_DRAW = "DRAW! Balanced match.\n\nWant a rematch?"
-POPUP_MSG_DISCONNECTED = "Opponent disconnected!\n\nYou win by forfeit!"
+POPUP_MSG_WIN = "WINNER!\n\nWant a rematch?"
+POPUP_MSG_LOSE = "LOOSER!\n\nWant a rematch?"
+POPUP_MSG_DRAW = "DRAW!\n\nWant a rematch?"
+POPUP_MSG_DISCONNECTED = "WINNER!\n\n!OPPONENT HAS LEFT THE ROOM!"
 
 POPUP_TITLE_REMATCH_CANCEL = "Rematch Cancelled"
 POPUP_MSG_REMATCH_CANCEL = "Opponent declined the rematch."
 
 POPUP_TITLE_CHALLENGE = "Challenge Request"
-POPUP_MSG_CHALLENGE = "Player with FD {fd} wants to join your game.\nDo you accept the challenge?"
+POPUP_MSG_CHALLENGE = "Player {fd} wants to join your game.\nDo you accept the challenge?"
 
 POPUP_TITLE_WARN = "Warning"                                          
 POPUP_MSG_INVALID_ID = "Please enter a valid match ID (numbers only)!" 
