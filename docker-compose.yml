@@ -10,3 +10,7 @@ services:
     build: ./client
     depends_on:
       - server
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro

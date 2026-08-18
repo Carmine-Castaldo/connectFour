@@ -6,7 +6,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . /app
-RUN gcc -o server main.c
+RUN gcc -o server $(find . -name "*.c") -pthread
 
 EXPOSE 8080
 

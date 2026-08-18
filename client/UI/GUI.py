@@ -1,15 +1,14 @@
 import tkinter as tk
 from tkinter import ttk
-import queue
-import re
-import os, platform
-from UI.components import config as cfg 
+import queue, re, os, platform
 from UI.components.board import Board
+from UI.components.button import MyButton
 from UI.components.disc import Disc
+from UI.components.main_window import MainWindow
 from UI.components.popup import Popup
 from UI.components.match_card import MatchCard
-from UI.components.button import MyButton
-from UI.components.main_window import MainWindow
+from UI.components import config as cfg
+
 
 class GUI:
     def __init__(self, network_controller):
@@ -19,7 +18,7 @@ class GUI:
         if hasattr(self.network, 'safe_queue'):
             while not self.network.safe_queue.empty():
                 self.enqueue_message(self.network.safe_queue.get())
-                
+    
         self.game_on = False
         self.my_turn = False
         self.my_game = False
@@ -32,6 +31,17 @@ class GUI:
 
         self.board = Board()
         self.root = MainWindow(on_close_callback=self.on_closing)
+        
+        self.root.minsize(1000, 900)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        w = min(int(screen_width * 0.8), 1020)
+        h = min(int(screen_height * 0.9), 980)
+        x = (screen_width - w) // 2
+        y = max(0, (screen_height - h) // 2)
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
+        
+
         self.main_container = self.root.main_container
         self.lobby_frame = None
         self.game_frame = None
@@ -50,7 +60,6 @@ class GUI:
                 try:
                     self.handle_server_message(msg)
                 except tk.TclError:
-
                     pass
         except queue.Empty:
             pass
@@ -84,7 +93,8 @@ class GUI:
         self.rooms_outer.columnconfigure(0, weight=1)
         self.rooms_outer.columnconfigure(1, weight=0)
         self.rooms_outer.rowconfigure(0, weight=1)
-        self.lobby_canvas = tk.Canvas(self.rooms_outer, bg=cfg.COLOR_BG, highlightthickness=0, height=500)        
+        
+        self.lobby_canvas = tk.Canvas(self.rooms_outer, bg=cfg.COLOR_BG, highlightthickness=0)   
         self.lobby_scrollbar = ttk.Scrollbar(
             self.rooms_outer, 
             orient="vertical", 
@@ -114,6 +124,7 @@ class GUI:
             
         self.status_label = tk.Label(self.lobby_frame, text=cfg.TXT_LOBBY_STATUS_DEFAULT, font=cfg.FONT_LABEL_SMALL, fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
         self.status_label.pack(pady=10)
+        
         btn_container = tk.Frame(self.lobby_frame, bg=cfg.COLOR_BG)
         btn_container.pack(pady=(5, 15))
         
@@ -128,7 +139,6 @@ class GUI:
         self.my_game = True
         self.status_label.config(text=cfg.MSG_CREATING, fg=cfg.COLOR_TEXT_NEON)
         self.network.create_match() 
-
 
     def make_move(self, col):
         print(f"MOVE {col}")
@@ -162,16 +172,16 @@ class GUI:
         self.main_container.columnconfigure(0, weight=1)
         
         self.turn_label = tk.Label(self.game_frame, text="PARTITA IN CORSO", font=cfg.FONT_LABEL_MEDIUM, fg=cfg.COLOR_TEXT_NEON, bg=cfg.COLOR_BG)
-        self.turn_label.pack(pady=10)
-        
+        self.turn_label.pack(pady=5)
+
         self.canvas = tk.Canvas(self.game_frame, width=980, height=840, bg=cfg.COLOR_BG_BOARD, highlightthickness=0)
-        self.canvas.pack(pady=10)
+        self.canvas.pack(pady=5)
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<Motion>", self.on_canvas_hover)
         self.draw_graphic_board()
         
         btn_abandon = MyButton(self.game_frame, text="ABANDON MATCH", variant="pink", command=self.on_abandon_click)
-        btn_abandon.pack(pady=(15, 20), ipadx=15, ipady=3)
+        btn_abandon.pack(pady=(5, 10), ipadx=15, ipady=3)
 
     def draw_graphic_board(self):
         if not hasattr(self, 'canvas') or self.canvas is None or not self.canvas.winfo_exists():
@@ -188,8 +198,7 @@ class GUI:
             player = int(parts[1])  
             row = int(parts[2])     
             col = int(parts[3])     
-            self.board.update(row,col,player)
-
+            self.board.update(row, col, player)
 
     def reset_graphic_board(self):
         self.reset_board()
@@ -210,40 +219,29 @@ class GUI:
 
         if msg.startswith("THE MATCH") and "IS CREATED" in msg:   
             self._handle_match_created(msg)
-            
         elif "IS STARTING" in msg:
             self._handle_match_status(msg, "PLAYING")
-            
         elif msg.startswith("THE GAME") and "IS OVER" in msg:
             self._handle_match_status(msg, "TERMINATED")
-            
         elif msg in ["YOUR TURN", "WAIT TURN"]:
             self._handle_turn_change(msg == "YOUR TURN")
-            
         elif msg.startswith("UPDATE_BOARD"):
             self._handle_board_update(msg)
-            
         elif msg.startswith("JOIN_REQUEST"):
             self._handle_join_request(msg)
-            
         elif msg in ["WIN", "LOSE", "DRAW", "OPPONENT_DISCONNECTED"]:
             self._handle_endgame(msg)
-            
         elif msg in ["OPPONENT_WANTS_REMATCH", "REMATCH_START", "REMATCH_DECLINED"]:
             self._handle_rematch_events(msg)
-            
         elif msg.startswith("ROOM"):
             self._handle_room_status(msg)
-            
         else:
             if getattr(self, 'status_label', None) is not None:
                 self.status_label.config(text=msg, fg=cfg.COLOR_TEXT_WHITE)
 
-
     def _handle_match_created(self, msg):
         match_id_list = re.findall(r'\d+', msg)
         if match_id_list:
-            print(f"MATCH_ID_FOUND {match_id_list}")
             m_id = match_id_list[0]
             self.known_matches[m_id] = "AVAILABLE"
             
@@ -254,7 +252,6 @@ class GUI:
                 self.status_label.config(text=cfg.MSG_WAITING_OPPONENT.format(match_id=m_id), fg=cfg.COLOR_TEXT_NEON)
             else:
                 self.status_label.config(text=cfg.MSG_NEW_ROOM_AVAILABLE.format(match_id=m_id), fg=cfg.COLOR_TEXT_PINK)
-                
                 if self.lobby_frame:
                     self.match_cards[m_id] = MatchCard(self.rooms_container, m_id, "AVAILABLE", self.on_join_card_click)
 
@@ -377,10 +374,7 @@ class GUI:
     def _handle_room_status(self, msg):
         parts = msg.strip().split()
         if len(parts) >= 3:
-            print(f"msg: {msg}\n")
             match_id_str = parts[1]
-
-            #necessario 
             try:
                 match_id_int = int(match_id_str)
             except ValueError:
@@ -413,7 +407,6 @@ class GUI:
             return
             
         match_id_str = parts[1]
-        
         try:
             match_id_int = int(match_id_str)
         except ValueError:
@@ -436,39 +429,37 @@ class GUI:
                 card.update("AVAILABLE")
             else:
                 card.update("CONNECTING")
-                
 
     def on_canvas_click(self, event):
         if not self.my_turn:
             return
       
-        col = event.x // 140
+        col = event.x // 140  
         if 0 <= col < 7:
             if self.board.get_cell(0, col) != 0:
                 return
             self.canvas.delete("hover_highlight")
             self.my_turn = False
             self.make_move(col)
-        
 
     def on_canvas_hover(self, event):
         if not self.my_turn:
             self.canvas.delete("hover_highlight")
             self.canvas.config(cursor="")
             return
-        col = event.x // 140
+        col = event.x // 140  
     
         if 0 <= col < 7:
             if self.board.get_cell(0, col) != 0:
-                            self.canvas.delete("hover_highlight")
-                            self.canvas.config(cursor="")
-                            return
+                self.canvas.delete("hover_highlight")
+                self.canvas.config(cursor="")
+                return
             self.canvas.config(cursor="hand2")
             self.canvas.delete("hover_highlight")
             my_color = cfg.COLOR_TEXT_PINK if getattr(self, 'my_game', False) else cfg.COLOR_TEXT_NEON
             self.canvas.create_rectangle(
-                col * 140 + 4, 4,
-                (col + 1) * 140 - 4, 806,
+                col * 140 + 4, 2,
+                (col + 1) * 140 - 6, 810, 
                 outline=my_color,
                 fill=my_color,
                 stipple="gray12",
@@ -479,40 +470,37 @@ class GUI:
             self.canvas.delete("hover_highlight")
             self.canvas.config(cursor="")
 
-
     def on_canvas_leave(self, event):
         self.canvas.delete("hover_highlight")
 
     def load_arcade_font(self):
-        
         font_filename = "ARCADECLASSIC.TTF"
-
         if not os.path.exists(font_filename):
-            print(f" {font_filename} NOT FOUND")
             return "Arial"
-            
         try:
             if platform.system() == "Linux":
                 home_dir = os.path.expanduser("~")
                 user_fonts_dir = os.path.join(home_dir, ".fonts")
-                
                 if not os.path.exists(user_fonts_dir):
                     os.makedirs(user_fonts_dir)
-                    
                 dest_font_path = os.path.join(user_fonts_dir, font_filename)
                 if not os.path.exists(dest_font_path):
                     import shutil
                     shutil.copy(font_filename, dest_font_path)
                     os.system("fc-cache -f")
-                
         except Exception as e:
             print(f"ERROR FONT: {e}")
-            
-            
         return "ArcadeClassic"
 
-
     def show_endgame_popup(self, msg):
+        if getattr(self, 'active_popup', None) is not None:
+            try:
+                self.active_popup.top.grab_release()
+                self.active_popup.top.destroy()
+            except Exception:
+                pass
+            self.active_popup = None
+
         if self.current_match_id is not None:
             self.known_matches[self.current_match_id] = "TERMINATED"
             
@@ -528,6 +516,7 @@ class GUI:
         else: 
             message = "WINNER\n\n OPPONENT HAS LEFT THE ROOM.!"
             p_type = "OK"
+            
         border_color = "#990033" if self.my_game else "#006699"
 
         def on_popup_closed(scelta_utente):
@@ -550,13 +539,11 @@ class GUI:
                 self.current_match_id = None
                 self.show_lobby_screen()
 
-        
         self.active_popup = Popup(self.root, cfg.POPUP_TITLE_END, message, popup_type=p_type, callback=on_popup_closed, color=border_color)
 
     def on_abandon_click(self):
         if self.network:
             self.network.send_msg("QUIT_MATCH")
-            
         self.current_match_id = None
         self.my_game = False
         self.reset_board()

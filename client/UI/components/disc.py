@@ -1,5 +1,6 @@
 from UI.components import config as cfg
 
+
 class Disc:
     def __init__(self, canvas, row, col):
         self.canvas = canvas
@@ -13,14 +14,42 @@ class Disc:
         self.y2 = self.center_y + (cfg.DIAMETER / 2)
         
     def draw(self, player):
+        cell_x1 = self.col * cfg.CELL_WIDTH
+        cell_y1 = self.row * cfg.CELL_HEIGHT
+        cell_x2 = cell_x1 + cfg.CELL_WIDTH
+        cell_y2 = cell_y1 + cfg.CELL_HEIGHT
+
+        self.canvas.create_rectangle(
+            cell_x1, cell_y1, cell_x2, cell_y2,
+            fill=cfg.COLOR_BG_BOARD, outline=""
+        )
+
+        if self.col == 0:
+            self.canvas.create_line(
+                cell_x1, cell_y1, cell_x1, cell_y2,
+                fill=cfg.COLOR_CABINET, width=2
+            )
+
+        self.canvas.create_line(
+            cell_x2, cell_y1, cell_x2, cell_y2,
+            fill=cfg.COLOR_CABINET, width=2
+        )
+
+        if self.row == 5:
+            self.canvas.create_line(
+                cell_x1, cell_y2, cell_x2, cell_y2,
+                fill=cfg.COLOR_CABINET, width=2
+            )
+
         if player == 0:
             self.canvas.create_oval(
                 self.x1, self.y1, self.x2, self.y2, 
-                fill=cfg.COLOR_CIRCLE_EMPTY, 
+                fill=cfg.COLOR_BG, 
                 outline=cfg.COLOR_CABINET, 
                 width=4
             )
             return
+
         if player == 1:
             base_color = cfg.COLOR_TEXT_PINK
             dark_color = getattr(cfg, 'COLOR_P1_DARK', "#990033")
@@ -55,6 +84,3 @@ class Disc:
         bx1 = self.center_x + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
         by1 = self.center_y + (cfg.DIAMETER * 0.22) - (hl2_size / 2)
         self.canvas.create_oval(bx1, by1, bx1 + hl2_size, by1 + hl2_size, fill=light_color, outline="")
-
-
-    
