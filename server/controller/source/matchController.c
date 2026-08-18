@@ -237,7 +237,7 @@ void handle_client_disconnect(int client_socket) {
     if (match != NULL) {
         int opp = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
         
-        if (match->state == status_game_on || match->state == status_terminated) {
+        if (match->state == status_game_on) {
             if (opp != -1) 
                 send_msg(opp, "OPPONENT_DISCONNECTED");
             char msg[64];
@@ -246,7 +246,17 @@ void handle_client_disconnect(int client_socket) {
             
             pthread_mutex_unlock(&mutex_match);
             reset_match(match->id_match); 
-        } 
+        }  else if (match->state == status_terminated) {
+            if (opp != -1) 
+                send_msg(opp, "REMATCH_DECLINED"); 
+            
+            char msg[64];
+            snprintf(msg, sizeof(msg), "THE GAME %d IS OVER", match->id_match);
+            broadcast(msg);
+            
+            pthread_mutex_unlock(&mutex_match);
+            reset_match(match->id_match);
+        }
         else if (match->state == status_waiting || match->state == status_connecting) {
             if (client_socket == match->fd_giocatore1) { 
                 if (match->state == status_connecting && match->join_status == 0) {

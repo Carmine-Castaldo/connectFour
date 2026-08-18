@@ -28,9 +28,9 @@ class MatchCard:
             self.frame.config(bg=cfg.COLOR_BG_BOARD, highlightbackground=cfg.COLOR_CABINET)
             self.lbl_id.config(bg=cfg.COLOR_BG_BOARD, fg=cfg.COLOR_TEXT_WHITE)
             
-        elif status == "BUSY":
-            self.lbl_status.config(text="Occupata...", fg=cfg.COLOR_TEXT_PINK, bg=cfg.COLOR_BG_BOARD)
-            self.btn_join.config(state="disabled", text="BUSY", fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
+        elif status == "CONNECTING":  # <-- PRIMA ERA "BUSY"
+            self.lbl_status.config(text="CONNECTING...", fg=cfg.COLOR_TEXT_PINK, bg=cfg.COLOR_BG_BOARD)
+            self.btn_join.config(state="disabled", text="WAIT", fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
             self.frame.config(bg=cfg.COLOR_BG_BOARD, highlightbackground=cfg.COLOR_CABINET)
             self.lbl_id.config(bg=cfg.COLOR_BG_BOARD, fg=cfg.COLOR_TEXT_WHITE)
             
@@ -45,6 +45,7 @@ class MatchCard:
             self.lbl_id.config(bg=cfg.COLOR_BG, fg=cfg.COLOR_TEXT_MUTED)
             self.lbl_status.config(text="TERMINATED", fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
             self.btn_join.config(state="disabled", text="JOIN", fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
+
 
     def check_exists(self):
         return self.frame.winfo_exists()

@@ -255,17 +255,23 @@ class GUI:
             else:
                 self.status_label.config(text=cfg.MSG_NEW_ROOM_AVAILABLE.format(match_id=m_id), fg=cfg.COLOR_TEXT_PINK)
                 
-            if self.lobby_frame:
-                self.match_cards[m_id] = MatchCard(self.rooms_container, m_id, "AVAILABLE", self.on_join_card_click)
+                if self.lobby_frame:
+                    self.match_cards[m_id] = MatchCard(self.rooms_container, m_id, "AVAILABLE", self.on_join_card_click)
 
     def _handle_match_status(self, msg, new_status):
-
         match_id_list = re.findall(r'\d+', msg)
         if match_id_list:
-            m_id = match_id_list[0]
-            self.known_matches[m_id] = new_status
-            if self.lobby_frame and m_id in self.match_cards:
-                self.match_cards[m_id].update(new_status)
+            match_id_str = match_id_list[0]
+            try:
+                match_id_int = int(match_id_str)
+            except ValueError:
+                match_id_int = match_id_str
+
+            self.known_matches[match_id_str] = new_status
+            card = self.match_cards.get(match_id_int) or self.match_cards.get(match_id_str)
+            
+            if self.lobby_frame and card:
+                card.update(new_status)
 
     def _handle_turn_change(self, is_my_turn):
         self.my_turn = is_my_turn
@@ -317,6 +323,13 @@ class GUI:
         )
 
     def _handle_endgame(self, msg):
+        if getattr(self, 'active_popup', None) is not None:
+            try:
+                self.active_popup.top.grab_release()
+                self.active_popup.top.destroy()
+            except Exception:
+                pass
+            self.active_popup = None
         self.game_on = False
         self.last_game = msg
         self.disable_buttons()
@@ -365,12 +378,22 @@ class GUI:
         parts = msg.strip().split()
         if len(parts) >= 3:
             print(f"msg: {msg}\n")
-            m_id = int(parts[1])
-            is_creator = getattr(self, 'my_game', False) and str(self.current_match_id) == str(m_id)
+            match_id_str = parts[1]
+
+            #necessario 
+            try:
+                match_id_int = int(match_id_str)
+            except ValueError:
+                match_id_int = match_id_str
+                
+            is_creator = getattr(self, 'my_game', False) and str(self.current_match_id) == str(match_id_str)
+            
             if not is_creator:
-                if m_id not in self.match_cards and self.lobby_frame:
-                    self.match_cards[m_id] = MatchCard(self.rooms_container, m_id, "AVAILABLE", self.on_join_card_click)
-            self.update_match_card_busy(msg)
+                card_exists = (match_id_int in self.match_cards) or (match_id_str in self.match_cards)
+                if not card_exists and self.lobby_frame:
+                    self.match_cards[match_id_int] = MatchCard(self.rooms_container, match_id_int, "CONNECTING", self.on_join_card_click)
+            
+            self.update_match_card(msg)
 
     def start(self):
         self.root.mainloop()
@@ -378,37 +401,41 @@ class GUI:
     def reset_board(self):
         self.board.reset()
 
-    def update_match_card_started(self, msg):
-        parts = msg.strip().split()
-        if len(parts) < 2:
-            return
-        match_id = parts[1]
-        card = self.match_cards.get(match_id)
-        if card:
-            card.update("PLAYING")
-
     def on_join_card_click(self, match_id):
         self.reset_board()
         self.my_game = False
         self.status_label.config(text=cfg.MSG_JOINING.format(match_id=match_id), fg=cfg.COLOR_TEXT_PINK)
         self.network.join_match(str(match_id))
 
-    def update_match_card_busy(self, msg):
+    def update_match_card(self, msg):
         parts = msg.strip().split()
         if len(parts) < 2:
             return
+            
         match_id_str = parts[1]
-        match_id_int = int(match_id_str)
-        is_busy = "BUSY" in msg
+        
+        try:
+            match_id_int = int(match_id_str)
+        except ValueError:
+            match_id_int = match_id_str
 
         card = self.match_cards.get(match_id_int) or self.match_cards.get(match_id_str)
+        
         if card:
             if not card.check_exists():
                 self.match_cards.pop(match_id_int, None)
                 self.match_cards.pop(match_id_str, None)
                 return
-            
-            card.update("BUSY" if is_busy else "AVAILABLE")
+        
+            msg_upper = msg.upper()
+            if "PLAYING" in msg_upper or "STARTING" in msg_upper:
+                card.update("PLAYING")
+            elif "TERMINATED" in msg_upper or "OVER" in msg_upper:
+                card.update("TERMINATED")
+            elif "AVAILABLE" in msg_upper:
+                card.update("AVAILABLE")
+            else:
+                card.update("CONNECTING")
                 
 
     def on_canvas_click(self, event):
