@@ -28,7 +28,7 @@ class MatchCard:
             self.frame.config(bg=cfg.COLOR_BG_BOARD, highlightbackground=cfg.COLOR_CABINET)
             self.lbl_id.config(bg=cfg.COLOR_BG_BOARD, fg=cfg.COLOR_TEXT_WHITE)
             
-        elif status == "CONNECTING":  # <-- PRIMA ERA "BUSY"
+        elif status == "CONNECTING":  
             self.lbl_status.config(text="CONNECTING...", fg=cfg.COLOR_TEXT_PINK, bg=cfg.COLOR_BG_BOARD)
             self.btn_join.config(state="disabled", text="WAIT", fg=cfg.COLOR_TEXT_MUTED, bg=cfg.COLOR_BG)
             self.frame.config(bg=cfg.COLOR_BG_BOARD, highlightbackground=cfg.COLOR_CABINET)

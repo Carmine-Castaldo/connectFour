@@ -12,7 +12,6 @@
 
 #define MAX_CLIENT 100
 int clients[MAX_CLIENT];
-int next_client = 0;
 pthread_mutex_t mutex_clients = PTHREAD_MUTEX_INITIALIZER;
 
 int init_server(int port){

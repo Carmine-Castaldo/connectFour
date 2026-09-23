@@ -230,7 +230,7 @@ int play_turn(Match * match, int col){
     return inserted_row;
 }
 
-void handle_client_disconnect(int client_socket) {
+void    handle_client_disconnect(int client_socket) {
     pthread_mutex_lock(&mutex_match);
     Match *match = get_match(client_socket);
     
@@ -311,15 +311,15 @@ int handle_msg(int client_socket, char *buffer) {
     else if (strcmp(buffer, "DISCONNECT") == 0) {
         handle_client_disconnect(client_socket);
         return -1;
-    }else if( strcmp(buffer, "ACCEPT") == 0)
+    }else if(strcmp(buffer, "ACCEPT") == 0)
         handle_accept(client_socket);
     else if( strcmp(buffer, "REJECT") == 0)
         handle_reject(client_socket);
     else if (strcmp(buffer, "REMATCH_ACCEPT") == 0)
         handle_rematch_accept(client_socket);
-    else if (strcmp(buffer, "REMATCH_DECLINE") == 0) {
-        handle_rematch_declined(client_socket);
-    }else
+    else if (strcmp(buffer, "REMATCH_DECLINE") == 0)
+       handle_rematch_declined(client_socket);
+    else
         printf("%s\n",buffer);
 
     return 0;

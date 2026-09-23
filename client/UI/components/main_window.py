@@ -8,7 +8,6 @@ class MainWindow(tk.Tk):
         super().__init__()
         
         self.title(cfg.WINDOW_TITLE)
-        self.geometry(cfg.WINDOW_GEOMETRY)
         self.configure(bg=cfg.COLOR_BG)
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", on_close_callback)
@@ -16,7 +15,8 @@ class MainWindow(tk.Tk):
         self.overrideredirect(True)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
-    
+
+        self.setup_geometry()
         self.setup_styles()
 
         self.main_container = tk.Frame(
@@ -62,3 +62,15 @@ class MainWindow(tk.Tk):
         x = event.x_root - self._x
         y = event.y_root - self._y
         self.geometry(f"+{x}+{y}")
+
+    def setup_geometry(self):
+        self.minsize(1000, 900)
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        w = min(int(screen_width * 0.8), 1020)
+        h = min(int(screen_height * 0.9), 980)
+        x = (screen_width - w) // 2
+        y = max(0, (screen_height - h) // 2)
+        
+        self.geometry(f"{w}x{h}+{x}+{y}")
