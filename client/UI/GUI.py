@@ -13,9 +13,11 @@ from UI.components import config as cfg
 
 class GUI:
     def __init__(self, network_controller):
+        
         self.network = network_controller
         self.network.on_message_callback = self.enqueue_message
         self.gui_queue = queue.Queue()
+
         if hasattr(self.network, 'safe_queue'):
             while not self.network.safe_queue.empty():
                 self.enqueue_message(self.network.safe_queue.get())
@@ -100,6 +102,7 @@ class GUI:
         self.show_lobby_screen()
 
     def show_game_screen(self):
+        self.reset_board()
         if self.lobby_frame:
             self.lobby_frame.destroy()
             self.lobby_frame = None
@@ -260,7 +263,10 @@ class GUI:
                 self.network.accept() 
             else:
                 self.network.reject() 
-                self.lobby_frame.update_status(cfg.MSG_REJECTED, color=cfg.COLOR_TEXT_PINK)
+                if self.lobby_frame and hasattr(self.lobby_frame, 'update_status'):
+                    self.lobby_frame.update_status(cfg.MSG_REJECTED, color=cfg.COLOR_TEXT_PINK)
+                elif getattr(self, 'status_label', None):
+                    self.status_label.config(text=cfg.MSG_REJECTED, fg=cfg.COLOR_TEXT_PINK)
 
 
         self.active_popup = Popup(

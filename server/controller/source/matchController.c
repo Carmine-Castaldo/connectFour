@@ -215,22 +215,17 @@ int request_to_creator(int id_match, int client_req) {
     }
 }
 
-int play_turn(Match * match, int col){
-    pthread_mutex_lock(&mutex_match);
-    int i = 0;
+int play_turn(Match * match, int col) {
     int inserted_row = -1;
-    if(match != NULL){
-        inserted_row = insertDisc(&matches[i], col, matches[i].turn + 1);
-        if(matches[i].turn == 0)
-            matches[i].turn = 1;
-        else
-            matches[i].turn = 0;
+    if (match != NULL) {
+        inserted_row = insertDisc(match, col, match->turn + 1);
+        if (inserted_row != -1) 
+            match->turn = (match->turn == 0) ? 1 : 0;
     }
-    pthread_mutex_unlock(&mutex_match);
     return inserted_row;
 }
 
-void    handle_client_disconnect(int client_socket) {
+void handle_client_disconnect(int client_socket) {
     pthread_mutex_lock(&mutex_match);
     Match *match = get_match(client_socket);
     
@@ -366,33 +361,40 @@ void handle_create(int client_socket) {
     
 }
 
-void handle_move(int client_socket, int col){
+void handle_move(int client_socket, int col) {
+    pthread_mutex_lock(&mutex_match);
     Match * match = get_match(client_socket);
-    if (match != NULL && match->state == status_game_on){
+    if (match != NULL && match->state == status_game_on) {
         int opp = (match->fd_giocatore1 == client_socket) ? match->fd_giocatore2 : match->fd_giocatore1;
         fflush(stdout);
-        if(opp != -1){
-            int row = play_turn(match, col);
-            pthread_mutex_lock(&mutex_match);
-            int player_num = (match->fd_giocatore1 == client_socket) ? 1 : 2;
-            char msg[64];
-            snprintf(msg, sizeof(msg), "UPDATE_BOARD %d %d %d", player_num, row, col);
-            send_msg(client_socket, msg);
-            send_msg(opp, msg);
-            usleep(1000);
-            if (check_win(match, col)) 
-                end_match(match, (client_socket == match->fd_giocatore1) ? WINNER_P1 : WINNER_P2);
-            else if (check_draw(match)) 
-                end_match(match, DRAW);
-            else {
-                send_msg(client_socket, "WAIT TURN");
-                send_msg(opp, "YOUR TURN");
-            }
-            pthread_mutex_unlock(&mutex_match);
-        }
         
-    } else
+        if (opp != -1) {
+            int row = play_turn(match, col);
+            
+            if (row != -1) { 
+                int player_num = (match->fd_giocatore1 == client_socket) ? 1 : 2;
+                char msg[64];
+                snprintf(msg, sizeof(msg), "UPDATE_BOARD %d %d %d", player_num, row, col);
+                
+                send_msg(client_socket, msg);
+                send_msg(opp, msg);
+                usleep(1000);
+                
+                if (check_win(match, col)) 
+                    end_match(match, (client_socket == match->fd_giocatore1) ? WINNER_P1 : WINNER_P2);
+                else if (check_draw(match)) 
+                    end_match(match, DRAW);
+                else {
+                    send_msg(client_socket, "WAIT TURN");
+                    send_msg(opp, "YOUR TURN");
+                }
+            } else 
+                printf("MOSSA ILLEGALE: Colonna %d piena!\n", col);
+        }
+    } else 
         printf("ILLEGAL MOVE\n"); 
+    
+    pthread_mutex_unlock(&mutex_match); 
 }
 
 void handle_quit(int client_socket){

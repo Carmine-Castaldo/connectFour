@@ -11,7 +11,6 @@ class MainWindow(tk.Tk):
         self.configure(bg=cfg.COLOR_BG)
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", on_close_callback)
-
         self.overrideredirect(True)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
